@@ -3,3 +3,12 @@
 name = "fontconfig"
 version = "0.0.1"
 authors = ["Austin Bonander <austin.bonander@gmail.com>"]
+license = "MIT"
+keywords = ["font", "search", "wrapper"]
+repository = "https://github.com/cybergeek94/fontconfig-rs"
+homepage = "https://github.com/cybergeek94/fontconfig-rs"
+description = "Wrapper around freedesktop's fontconfig library"
+
+[dependencies.fontconfig-sys]
+path = "fontconfig-sys"
+version = "~2.11.1"

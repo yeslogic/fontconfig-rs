@@ -1,0 +1,20 @@
+[package]
+
+name = "fontconfig-sys"
+version = "2.11.1"
+authors = ["Austin Bonander <austin.bonander@gmail.com>"]
+license = "MIT"
+keywords = ["fontconfig", "font", "search"]
+repository = "https://github.com/cybergeek94/fontconfig-rs"
+homepage = "https://github.com/cybergeek94/fontconfig-rs"
+description = "Bindings to fontconfig for locating font files."
+
+build = "build.rs"
+links = "fontconfig"
+
+[lib]
+name = "fontconfig-sys"
+path = "lib.rs"
+
+[build-dependencies]
+pkg-config = "*"

@@ -16,8 +16,8 @@ Usage
 
 Cargo.toml:
 ```toml
-[dependencies.fontconfig]
-git = "https://github.com/cybergeek94/fontconfig-rs"
+[dependencies]
+fontconfig = "*"
 ```
 
 main.rs:
@@ -38,7 +38,7 @@ You could then, for example, use `font.path` to create a `GlyphCache` from [`ope
 and pass it to [`conrod`][conrod].
 
 [gl]: https://github.com/PistonDevelopers/opengl_graphics
-[conrod]: https://github.com/PistonDevelopers/conrod     
+[conrod]: https://github.com/PistonDevelopers/conrod
 
 Documentation
 =============

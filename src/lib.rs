@@ -73,9 +73,10 @@ impl Font {
 /// A safe wrapper around fontconfig's `FcPattern`.
 pub struct Pattern<'a> {
     _m: PhantomData<&'a str>,
-    pat: *mut FcPattern,
+    pub pat: *mut FcPattern,
     /// This is just to hold the RAII C-strings while the `FcPattern` is alive.
     strings: Vec<CString>,
+    should_free: bool,
 }
 
 impl<'a> Pattern<'a> {
@@ -86,6 +87,7 @@ impl<'a> Pattern<'a> {
             _m: PhantomData {},
             pat: unsafe { fontconfig_sys::FcPatternCreate() },
             strings: Vec::new(),
+            should_free: true,
         }
     }
 
@@ -98,6 +100,7 @@ impl<'a> Pattern<'a> {
             _m: PhantomData {},
             pat: pat,
             strings: Vec::new(),
+            should_free: false,
         }
     }
 

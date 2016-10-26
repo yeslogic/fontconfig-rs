@@ -10,7 +10,7 @@
 
 #![feature(phase, unsafe_destructor)]
 
-extern crate "fontconfig-sys" as fontconfig;
+extern crate fontconfig_sys as fontconfig;
 #[phase(plugin, link)] extern crate log;
 
 use fontconfig::FcPattern;

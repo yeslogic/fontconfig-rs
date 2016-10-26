@@ -8,23 +8,22 @@
 //!
 //! [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/t1.html
 
-#![feature(phase, unsafe_destructor)]
+extern crate fontconfig_sys;
+extern crate log;
 
-extern crate fontconfig_sys as fontconfig;
-#[phase(plugin, link)] extern crate log;
+use fontconfig_sys::FcPattern;
 
-use fontconfig::FcPattern;
-
-use std::c_str::CString;
-use std::kinds::marker;
+use std::ffi::{CString, CStr};
+use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
 use std::sync::{Once, ONCE_INIT};
+use std::path::PathBuf;
 
 static FC_INIT: Once = ONCE_INIT;
 
 fn fc_init() {
-    FC_INIT.doit(|| assert_eq!(unsafe { fontconfig::FcInit() }, 1));
+    FC_INIT.call_once(|| assert_eq!(unsafe { fontconfig_sys::FcInit() }, 1));
 }
 
 /// A very high-level view of a font, only concerned with the name and its file location.
@@ -39,7 +38,7 @@ pub struct Font {
     /// The true name of this font
     pub name: String,
     /// The location of this font on the filesystem.
-    pub path: Path,
+    pub path: PathBuf,
 }
 
 impl Font {
@@ -57,21 +56,21 @@ impl Font {
 
         font_match.name().and_then(|name| font_match.filename().map(|filename|
             Font {
-                name: name.into_string(),
-                path: Path::new(filename),
+                name: name.to_owned(),
+                path: PathBuf::from(filename),
             }
         ))
     }
 
     #[allow(dead_code)]
     fn print_debug(&self) {
-        debug!("Name: {}\nPath: {}", self.name, self.path.display());
+        println!("Name: {}\nPath: {}", self.name, self.path.display());
     }
 }
 
 /// A safe wrapper around fontconfig's `FcPattern`.
 pub struct Pattern<'a> {
-    _m: marker::ContravariantLifetime<'a>,
+    _m: PhantomData<&'a str>,
     pat: *mut FcPattern,
     /// This is just to hold the RAII C-strings while the `FcPattern` is alive.
     strings: Vec<CString>,
@@ -82,17 +81,17 @@ impl<'a> Pattern<'a> {
         fc_init();
 
         Pattern {
-            _m: marker::ContravariantLifetime,
-            pat: unsafe{ fontconfig::FcPatternCreate() },
+            _m: PhantomData {},
+            pat: unsafe{ fontconfig_sys::FcPatternCreate() },
             strings: Vec::new(),
         }
     }
 
     fn from_pattern(pat: *mut FcPattern) -> Pattern<'a> {
-        unsafe { fontconfig::FcPatternReference(pat); }
+        unsafe { fontconfig_sys::FcPatternReference(pat); }
 
         Pattern {
-            _m: marker::ContravariantLifetime,
+            _m: PhantomData {},
             pat: pat,
             strings: Vec::new(),
         }
@@ -104,49 +103,52 @@ impl<'a> Pattern<'a> {
     ///
     /// [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html
     pub fn add_string(&mut self, name: &str, val: &str) {
-        let c_name = name.to_c_str();
+        let c_name = CString::new(name).unwrap();
+        let c_val = CString::new(val).unwrap();
 
         // `val` is copied inside fontconfig so no need to allocate it again.
-        val.with_c_str(|c_str| unsafe {
-            fontconfig::FcPatternAddString(self.pat, c_name.as_ptr(), c_str as *const u8);
-        });
+        unsafe {
+            fontconfig_sys::FcPatternAddString(self.pat, c_name.as_ptr(), c_val.as_ptr() as *const u8);
+        }
 
         self.strings.push(c_name);
     }
 
     /// Get the value for a key from this pattern.
-    pub fn get_string<'a>(&'a self, name: &str) -> Option<&'a str> {
-        name.with_c_str(|c_str| unsafe {
+    pub fn get_string<'b>(&'b self, name: &'b str) -> Option<&'b str> {
+        let c_name = CString::new(name).unwrap().as_ptr();
+        unsafe {
             let ret = mem::uninitialized();
-            if fontconfig::FcPatternGetString(&*self.pat, c_str, 0, ret) == 0 {
-                Some(std::str::from_c_str(*ret as *const i8))
+            if fontconfig_sys::FcPatternGetString(&*self.pat, c_name, 0, ret) == fontconfig_sys::FcResult::FcResultMatch {
+                let cstr = CStr::from_ptr(*ret as *const i8);
+                Some(cstr.to_str().unwrap())
             } else { None }
-        })
+        }
     }
 
     /// Print this pattern to stdout with all its values.
     #[allow(dead_code)]
     pub fn print(&self) {
-        unsafe { fontconfig::FcPatternPrint(&*self.pat); }
+        unsafe { fontconfig_sys::FcPatternPrint(&*self.pat); }
     }
 
     fn default_substitute(&mut self) {
-        unsafe { fontconfig::FcDefaultSubstitute(self.pat); }
+        unsafe { fontconfig_sys::FcDefaultSubstitute(self.pat); }
     }
 
     fn config_substitute(&mut self) {
-        unsafe { fontconfig::FcConfigSubstitute(ptr::null_mut(), self.pat, fontconfig::FcMatchPattern); }
+        unsafe { fontconfig_sys::FcConfigSubstitute(ptr::null_mut(), self.pat, fontconfig_sys::_FcMatchKind::FcMatchPattern); }
     }
 
     /// Get the best available match for this pattern, returned as a new pattern.
-    pub fn font_match<'a>(&'a mut self) -> Pattern<'a> {
+    pub fn font_match<'b>(&'b mut self) -> Pattern<'b> {
         self.default_substitute();
         self.config_substitute();
 
         unsafe {
-            let mut res = fontconfig::FcResultNoMatch;
+            let mut res = fontconfig_sys::FcResult::FcResultNoMatch;
             Pattern::from_pattern(
-                fontconfig::FcFontMatch(ptr::null_mut(), self.pat, &mut res)
+                fontconfig_sys::FcFontMatch(ptr::null_mut(), self.pat, &mut res)
             )
         }
     }
@@ -162,10 +164,9 @@ impl<'a> Pattern<'a> {
     }
 }
 
-#[unsafe_destructor]
 impl<'a> Drop for Pattern<'a> {
     fn drop(&mut self) {
-        unsafe { fontconfig::FcPatternDestroy(self.pat); }
+        unsafe { fontconfig_sys::FcPatternDestroy(self.pat); }
     }
 }
 
@@ -179,4 +180,3 @@ fn test_find_font() {
     Font::find("dejavu sans", None).unwrap().print_debug();
     Font::find("dejavu sans", Some("oblique")).unwrap().print_debug();
 }
-

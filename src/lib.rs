@@ -54,12 +54,14 @@ impl Font {
 
         let font_match = pat.font_match();
 
-        font_match.name().and_then(|name| font_match.filename().map(|filename|
-            Font {
-                name: name.to_owned(),
-                path: PathBuf::from(filename),
-            }
-        ))
+        font_match.name().and_then(|name| {
+            font_match.filename().map(|filename| {
+                Font {
+                    name: name.to_owned(),
+                    path: PathBuf::from(filename),
+                }
+            })
+        })
     }
 
     #[allow(dead_code)]
@@ -71,9 +73,10 @@ impl Font {
 /// A safe wrapper around fontconfig's `FcPattern`.
 pub struct Pattern<'a> {
     _m: PhantomData<&'a str>,
-    pat: *mut FcPattern,
+    pub pat: *mut FcPattern,
     /// This is just to hold the RAII C-strings while the `FcPattern` is alive.
     strings: Vec<CString>,
+    should_free: bool,
 }
 
 impl<'a> Pattern<'a> {
@@ -82,18 +85,22 @@ impl<'a> Pattern<'a> {
 
         Pattern {
             _m: PhantomData {},
-            pat: unsafe{ fontconfig_sys::FcPatternCreate() },
+            pat: unsafe { fontconfig_sys::FcPatternCreate() },
             strings: Vec::new(),
+            should_free: true,
         }
     }
 
-    fn from_pattern(pat: *mut FcPattern) -> Pattern<'a> {
-        unsafe { fontconfig_sys::FcPatternReference(pat); }
+    pub fn from_pattern(pat: *mut FcPattern) -> Pattern<'a> {
+        unsafe {
+            fontconfig_sys::FcPatternReference(pat);
+        }
 
         Pattern {
             _m: PhantomData {},
             pat: pat,
             strings: Vec::new(),
+            should_free: false,
         }
     }
 
@@ -108,36 +115,52 @@ impl<'a> Pattern<'a> {
 
         // `val` is copied inside fontconfig so no need to allocate it again.
         unsafe {
-            fontconfig_sys::FcPatternAddString(self.pat, c_name.as_ptr(), c_val.as_ptr() as *const u8);
+            fontconfig_sys::FcPatternAddString(self.pat,
+                                               c_name.as_ptr(),
+                                               c_val.as_ptr() as *const u8);
         }
 
         self.strings.push(c_name);
     }
 
     /// Get the value for a key from this pattern.
-    pub fn get_string<'b>(&'b self, name: &'b str) -> Option<&'b str> {
-        let c_name = CString::new(name).unwrap().as_ptr();
+    pub fn get_string<'b, 'c>(&'b self, name: &'b str) -> Option<&'b str> {
+        let c_name = CString::new(name).unwrap();
         unsafe {
-            let ret = mem::uninitialized();
-            if fontconfig_sys::FcPatternGetString(&*self.pat, c_name, 0, ret) == fontconfig_sys::FcResult::FcResultMatch {
-                let cstr = CStr::from_ptr(*ret as *const i8);
+            let mut ret: *mut fontconfig_sys::FcChar8 = mem::uninitialized();
+            if fontconfig_sys::FcPatternGetString(self.pat,
+                                                  c_name.as_ptr(),
+                                                  0,
+                                                  &mut ret as *mut _) ==
+               fontconfig_sys::FcResult::FcResultMatch {
+                let cstr = CStr::from_ptr(ret as *const i8);
                 Some(cstr.to_str().unwrap())
-            } else { None }
+            } else {
+                None
+            }
         }
     }
 
     /// Print this pattern to stdout with all its values.
     #[allow(dead_code)]
     pub fn print(&self) {
-        unsafe { fontconfig_sys::FcPatternPrint(&*self.pat); }
+        unsafe {
+            fontconfig_sys::FcPatternPrint(&*self.pat);
+        }
     }
 
     fn default_substitute(&mut self) {
-        unsafe { fontconfig_sys::FcDefaultSubstitute(self.pat); }
+        unsafe {
+            fontconfig_sys::FcDefaultSubstitute(self.pat);
+        }
     }
 
     fn config_substitute(&mut self) {
-        unsafe { fontconfig_sys::FcConfigSubstitute(ptr::null_mut(), self.pat, fontconfig_sys::_FcMatchKind::FcMatchPattern); }
+        unsafe {
+            fontconfig_sys::FcConfigSubstitute(ptr::null_mut(),
+                                               self.pat,
+                                               fontconfig_sys::_FcMatchKind::FcMatchPattern);
+        }
     }
 
     /// Get the best available match for this pattern, returned as a new pattern.
@@ -147,9 +170,7 @@ impl<'a> Pattern<'a> {
 
         unsafe {
             let mut res = fontconfig_sys::FcResult::FcResultNoMatch;
-            Pattern::from_pattern(
-                fontconfig_sys::FcFontMatch(ptr::null_mut(), self.pat, &mut res)
-            )
+            Pattern::from_pattern(fontconfig_sys::FcFontMatch(ptr::null_mut(), self.pat, &mut res))
         }
     }
 
@@ -166,7 +187,11 @@ impl<'a> Pattern<'a> {
 
 impl<'a> Drop for Pattern<'a> {
     fn drop(&mut self) {
-        unsafe { fontconfig_sys::FcPatternDestroy(self.pat); }
+        if self.should_free {
+            unsafe {
+                fontconfig_sys::FcPatternDestroy(self.pat);
+            }
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 
-name = "fontconfig_sys"
+name = "fontconfig-sys"
 version = "2.11.1"
 authors = ["Austin Bonander <austin.bonander@gmail.com>"]
 license = "MIT"

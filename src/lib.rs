@@ -184,8 +184,10 @@ impl<'a> Pattern<'a> {
 
 impl<'a> Drop for Pattern<'a> {
     fn drop(&mut self) {
-        unsafe {
-            fontconfig_sys::FcPatternDestroy(self.pat);
+        if self.should_free {
+            unsafe {
+                fontconfig_sys::FcPatternDestroy(self.pat);
+            }
         }
     }
 }

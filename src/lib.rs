@@ -124,11 +124,11 @@ impl<'a> Pattern<'a> {
     }
 
     /// Get the value for a key from this pattern.
-    pub fn get_string<'b, 'c>(&'b self, name: &'c str) -> Option<&'b str> {
+    pub fn get_string<'b, 'c>(&'b self, name: &'b str) -> Option<&'b str> {
         let c_name = CString::new(name).unwrap().as_ptr();
         unsafe {
             let ret = mem::uninitialized();
-            if fontconfig_sys::FcPatternGetString(&*self.pat, c_name, 0, ret) ==
+            if fontconfig_sys::FcPatternGetString(self.pat, c_name, 0, ret) ==
                fontconfig_sys::FcResult::FcResultMatch {
                 let cstr = CStr::from_ptr(*ret as *const i8);
                 Some(cstr.to_str().unwrap())

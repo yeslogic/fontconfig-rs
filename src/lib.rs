@@ -125,6 +125,7 @@ impl<'a> Pattern<'a> {
 
     /// Get the value for a key from this pattern.
     pub fn get_string<'b, 'c>(&'b self, name: &'b str) -> Option<&'b str> {
+        println!("vvvvvvvv");
         let c_name = CString::new(name).unwrap().as_ptr();
         unsafe {
             let ret = mem::uninitialized();

@@ -125,17 +125,14 @@ impl<'a> Pattern<'a> {
 
     /// Get the value for a key from this pattern.
     pub fn get_string<'b, 'c>(&'b self, name: &'b str) -> Option<&'b str> {
-        println!("vvvvvvvv");
         let c_name = CString::new(name).unwrap();
         unsafe {
             let mut ret: *mut fontconfig_sys::FcChar8 = mem::uninitialized();
-            println!("bb");
             if fontconfig_sys::FcPatternGetString(self.pat,
                                                   c_name.as_ptr(),
                                                   0,
                                                   &mut ret as *mut _) ==
                fontconfig_sys::FcResult::FcResultMatch {
-                println!("hlkhlhjkhlkhjhlkh");
                 let cstr = CStr::from_ptr(ret as *const i8);
                 Some(cstr.to_str().unwrap())
             } else {

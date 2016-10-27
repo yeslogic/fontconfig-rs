@@ -128,7 +128,7 @@ impl<'a> Pattern<'a> {
         println!("vvvvvvvv");
         let c_name = CString::new(name).unwrap();
         unsafe {
-            let ret = mem::uninitialized();
+            let mut ret: *mut fontconfig::FcChar8 = mem::uninitialized();
              println!("bb");
             if fontconfig_sys::FcPatternGetString(self.pat, c_name.as_ptr(), 0, ret) ==
                fontconfig_sys::FcResult::FcResultMatch {

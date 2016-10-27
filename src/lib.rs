@@ -128,9 +128,11 @@ impl<'a> Pattern<'a> {
         let c_name = CString::new(name).unwrap().as_ptr();
         unsafe {
             let ret = mem::uninitialized();
+             println!("bb");
             if fontconfig_sys::FcPatternGetString(self.pat, c_name, 0, ret) ==
                fontconfig_sys::FcResult::FcResultMatch {
-                let cstr = CStr::from_ptr(ret as *const i8);
+                println!("hlkhlhjkhlkhjhlkh");
+                let cstr = CStr::from_ptr(*ret as *const i8);
                 Some(cstr.to_str().unwrap())
             } else {
                 None

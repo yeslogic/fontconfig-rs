@@ -130,7 +130,7 @@ impl<'a> Pattern<'a> {
             let ret = mem::uninitialized();
             if fontconfig_sys::FcPatternGetString(self.pat, c_name, 0, ret) ==
                fontconfig_sys::FcResult::FcResultMatch {
-                let cstr = CStr::from_ptr(*ret as *const i8);
+                let cstr = CStr::from_ptr(ret as *const i8);
                 Some(cstr.to_str().unwrap())
             } else {
                 None

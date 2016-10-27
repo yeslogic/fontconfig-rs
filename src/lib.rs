@@ -136,7 +136,7 @@ impl<'a> Pattern<'a> {
                                                   &mut ret as *mut _) ==
                fontconfig_sys::FcResult::FcResultMatch {
                 println!("hlkhlhjkhlkhjhlkh");
-                let cstr = CStr::from_ptr(*ret as *const i8);
+                let cstr = CStr::from_ptr(ret as *const i8);
                 Some(cstr.to_str().unwrap())
             } else {
                 None

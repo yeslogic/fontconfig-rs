@@ -123,7 +123,7 @@ impl<'a> Pattern<'a> {
         self.strings.push(c_name);
     }
 
-    /// Get the value for a key from this pattern.
+    /// Get string the value for a key from this pattern.
     pub fn get_string<'b, 'c>(&'b self, name: &'b str) -> Option<&'b str> {
         let c_name = CString::new(name).unwrap();
         unsafe {
@@ -135,6 +135,23 @@ impl<'a> Pattern<'a> {
                fontconfig_sys::FcResult::FcResultMatch {
                 let cstr = CStr::from_ptr(ret as *const i8);
                 Some(cstr.to_str().unwrap())
+            } else {
+                None
+            }
+        }
+    }
+
+    /// Get the integer value for a key from this pattern.
+    pub fn get_int(&self, name: &str) -> Option<i32> {
+        let c_name = CString::new(name).unwrap();
+        unsafe {
+            let mut ret: i32 = 0;
+            if fontconfig_sys::FcPatternGetInteger(self.pat,
+                                                   c_name.as_ptr(),
+                                                   0,
+                                                   &mut ret as *mut i32) ==
+               fontconfig_sys::FcResult::FcResultMatch {
+                Some(ret)
             } else {
                 None
             }
@@ -182,6 +199,11 @@ impl<'a> Pattern<'a> {
     /// Get the "file" (path on the filesystem) of this font pattern.
     pub fn filename(&self) -> Option<&str> {
         self.get_string("file")
+    }
+
+    /// Get the "index" (The index of the font within the file) of this pattern.
+    pub fn face_index(&self) -> Option<i32> {
+        self.get_int("index")
     }
 }
 

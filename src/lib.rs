@@ -14,11 +14,11 @@ extern crate log;
 use fontconfig_sys::FcPattern;
 
 use std::ffi::{CString, CStr};
-use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
 use std::sync::{Once, ONCE_INIT};
 use std::path::PathBuf;
+use std::ops::Deref;
 
 static FC_INIT: Once = ONCE_INIT;
 
@@ -71,33 +71,28 @@ impl Font {
 }
 
 /// A safe wrapper around fontconfig's `FcPattern`.
-pub struct Pattern<'a> {
-    _m: PhantomData<&'a str>,
+#[repr(C)]
+pub struct Pattern {
     pub pat: *mut FcPattern,
-    /// This is just to hold the RAII C-strings while the `FcPattern` is alive.
-    strings: Vec<CString>,
 }
 
-impl<'a> Pattern<'a> {
-    pub fn new() -> Pattern<'a> {
+impl Pattern {
+    pub fn new() -> Pattern {
         fc_init();
 
         Pattern {
-            _m: PhantomData {},
             pat: unsafe { fontconfig_sys::FcPatternCreate() },
-            strings: Vec::new(),
         }
     }
 
-    pub fn from_pattern(pat: *mut FcPattern) -> Pattern<'a> {
+    /// Create a `Pattern` from a raw fontconfig FcPattern pointer. The pattern is referenced.
+    pub fn from_pattern(pat: *mut FcPattern) -> Pattern {
         unsafe {
             fontconfig_sys::FcPatternReference(pat);
         }
 
         Pattern {
-            _m: PhantomData {},
             pat: pat,
-            strings: Vec::new(),
         }
     }
 
@@ -110,14 +105,11 @@ impl<'a> Pattern<'a> {
         let c_name = CString::new(name).unwrap();
         let c_val = CString::new(val).unwrap();
 
-        // `val` is copied inside fontconfig so no need to allocate it again.
         unsafe {
             fontconfig_sys::FcPatternAddString(self.pat,
                                                c_name.as_ptr(),
                                                c_val.as_ptr() as *const u8);
         }
-
-        self.strings.push(c_name);
     }
 
     /// Get string the value for a key from this pattern.
@@ -178,7 +170,7 @@ impl<'a> Pattern<'a> {
     }
 
     /// Get the best available match for this pattern, returned as a new pattern.
-    pub fn font_match<'b>(&'b mut self) -> Pattern<'b> {
+    pub fn font_match(&mut self) -> Pattern {
         self.default_substitute();
         self.config_substitute();
 
@@ -204,7 +196,24 @@ impl<'a> Pattern<'a> {
     }
 }
 
-impl<'a> Drop for Pattern<'a> {
+impl std::fmt::Debug for Pattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let fcstr = unsafe { fontconfig_sys::FcNameUnparse(self.pat) };
+        let fcstr = unsafe { CStr::from_ptr(fcstr as *const i8) };
+        let result = write!(f, "{:?}", fcstr);
+        unsafe { fontconfig_sys::FcStrFree(fcstr.as_ptr() as *mut u8) };
+        result
+    }
+}
+
+impl Clone for Pattern {
+    fn clone(&self) -> Self {
+        let clone = unsafe { fontconfig_sys::FcPatternDuplicate(self.pat) };
+        Pattern { pat: clone }
+    }
+}
+
+impl Drop for Pattern {
     fn drop(&mut self) {
         unsafe {
             fontconfig_sys::FcPatternDestroy(self.pat);
@@ -212,13 +221,81 @@ impl<'a> Drop for Pattern<'a> {
     }
 }
 
-#[test]
-fn it_works() {
-    fc_init();
+pub struct FontSet {
+    fcset: *mut fontconfig_sys::FcFontSet,
 }
 
-#[test]
-fn test_find_font() {
-    Font::find("dejavu sans", None).unwrap().print_debug();
-    Font::find("dejavu sans", Some("oblique")).unwrap().print_debug();
+impl FontSet {
+    pub fn new() -> FontSet {
+        fc_init();
+        let fcset = unsafe { fontconfig_sys::FcFontSetCreate() };
+        FontSet { fcset: fcset }
+    }
+
+    pub fn from_raw(raw_set: *mut fontconfig_sys::FcFontSet) -> FontSet {
+        FontSet { fcset: raw_set }
+    }
+
+    pub fn add_pattern(&mut self, pat: Pattern) {
+        unsafe {
+            fontconfig_sys::FcFontSetAdd(self.fcset, pat.pat);
+            mem::forget(pat);
+        }
+    }
+
+    pub fn print(&self) {
+        unsafe { fontconfig_sys::FcFontSetPrint(self.fcset) };
+    }
+}
+
+impl Deref for FontSet {
+    type Target = [Pattern];
+
+    fn deref(&self) -> &[Pattern] {
+        unsafe {
+            let raw_fs = *self.fcset;
+            let slce: &[*mut FcPattern] =  std::slice::from_raw_parts(raw_fs.fonts, raw_fs.nfont as usize);
+            mem::transmute(slce)
+        }
+    }
+}
+
+impl Drop for FontSet {
+    fn drop(&mut self) {
+        unsafe { fontconfig_sys::FcFontSetDestroy(self.fcset) }
+    }
+}
+
+pub fn list_fonts(pattern: &Pattern) -> FontSet {
+    fc_init();
+    let ptr = unsafe {
+        fontconfig_sys::FcFontList(ptr::null_mut(), pattern.pat, ptr::null_mut())
+    };
+    FontSet::from_raw(ptr)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        use super::fc_init;
+        fc_init();
+    }
+
+    #[test]
+    fn test_find_font() {
+        Font::find("dejavu sans", None).unwrap().print_debug();
+        Font::find("dejavu sans", Some("oblique")).unwrap().print_debug();
+    }
+
+    #[test]
+    fn test_print() {
+        let fontset = list_fonts(&Pattern::new());
+        for pattern in (&fontset).iter() {
+            println!("{:?}", pattern.name());
+        }
+    }
+
 }

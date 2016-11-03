@@ -76,7 +76,6 @@ pub struct Pattern<'a> {
     pub pat: *mut FcPattern,
     /// This is just to hold the RAII C-strings while the `FcPattern` is alive.
     strings: Vec<CString>,
-    should_free: bool,
 }
 
 impl<'a> Pattern<'a> {
@@ -87,7 +86,6 @@ impl<'a> Pattern<'a> {
             _m: PhantomData {},
             pat: unsafe { fontconfig_sys::FcPatternCreate() },
             strings: Vec::new(),
-            should_free: true,
         }
     }
 
@@ -100,7 +98,6 @@ impl<'a> Pattern<'a> {
             _m: PhantomData {},
             pat: pat,
             strings: Vec::new(),
-            should_free: false,
         }
     }
 
@@ -209,10 +206,8 @@ impl<'a> Pattern<'a> {
 
 impl<'a> Drop for Pattern<'a> {
     fn drop(&mut self) {
-        if self.should_free {
-            unsafe {
-                fontconfig_sys::FcPatternDestroy(self.pat);
-            }
+        unsafe {
+            fontconfig_sys::FcPatternDestroy(self.pat);
         }
     }
 }

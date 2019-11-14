@@ -12,20 +12,21 @@ extern crate fontconfig_sys as fontconfig;
 
 use crate::fontconfig::fontconfig as fontconfig_sys;
 
-use crate::fontconfig_sys::FcPattern;
-
 use std::ffi::{CStr, CString};
 use std::mem;
-
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::ptr;
-use std::sync::{Once};
-use std::ops::Deref;
 
-static FC_INIT: Once = Once::new();
+use fontconfig::fontconfig::{FcBool, FcPattern};
 
-fn fc_init() {
-    FC_INIT.call_once(|| assert_eq!(unsafe { fontconfig_sys::FcInit() }, 1));
+#[allow(non_upper_case_globals)]
+const FcTrue: FcBool = 1;
+#[allow(non_upper_case_globals)]
+const FcFalse: FcBool = 0;
+
+pub fn init() -> bool {
+    unsafe { fontconfig_sys::FcInit() == FcTrue }
 }
 
 /// A very high-level view of a font, only concerned with the name and its file location.
@@ -78,8 +79,6 @@ pub struct Pattern {
 
 impl Pattern {
     pub fn new() -> Pattern {
-        fc_init();
-
         Pattern {
             pat: unsafe { fontconfig_sys::FcPatternCreate() },
         }
@@ -233,7 +232,6 @@ pub struct FontSet {
 
 impl FontSet {
     pub fn new() -> FontSet {
-        fc_init();
         let fcset = unsafe { fontconfig_sys::FcFontSetCreate() };
         FontSet { fcset: fcset }
     }
@@ -260,7 +258,8 @@ impl Deref for FontSet {
     fn deref(&self) -> &[Pattern] {
         unsafe {
             let raw_fs = self.fcset;
-            let slce: &[*mut FcPattern] =  std::slice::from_raw_parts((*raw_fs).fonts, (*raw_fs).nfont as usize);
+            let slce: &[*mut FcPattern] =
+                std::slice::from_raw_parts((*raw_fs).fonts, (*raw_fs).nfont as usize);
             mem::transmute(slce)
         }
     }
@@ -273,7 +272,6 @@ impl Drop for FontSet {
 }
 
 pub fn list_fonts(pattern: &Pattern) -> FontSet {
-    fc_init();
     let ptr = unsafe { fontconfig_sys::FcFontList(ptr::null_mut(), pattern.pat, ptr::null_mut()) };
     FontSet::from_raw(ptr)
 }
@@ -284,8 +282,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        use super::fc_init;
-        fc_init();
+        assert!(super::init())
     }
 
     #[test]

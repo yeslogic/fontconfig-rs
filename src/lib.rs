@@ -116,7 +116,7 @@ impl Pattern {
     pub fn get_string<'b, 'c>(&'b self, name: &'b str) -> Option<&'b str> {
         let c_name = CString::new(name).unwrap();
         unsafe {
-            let mut ret: *mut fontconfig_sys::FcChar8 = mem::uninitialized();
+            let mut ret: *mut fontconfig_sys::FcChar8 = ptr::null_mut();
             if fontconfig_sys::FcPatternGetString(self.pat, c_name.as_ptr(), 0, &mut ret as *mut _)
                 == fontconfig_sys::FcResultMatch
             {

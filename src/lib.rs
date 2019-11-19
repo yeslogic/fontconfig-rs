@@ -8,9 +8,9 @@
 //!
 //! [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/t1.html
 
-extern crate fontconfig_sys as fontconfig;
+extern crate fontconfig_sys;
 
-use crate::fontconfig::fontconfig as fontconfig_sys;
+pub use crate::fontconfig_sys::fontconfig as sys;
 
 use std::ffi::{CStr, CString};
 use std::mem;
@@ -18,66 +18,66 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::ptr;
 
-use fontconfig::fontconfig::{FcBool, FcPattern};
+use sys::{FcBool, FcPattern};
 
-pub use fontconfig_sys::FC_ANTIALIAS;
-pub use fontconfig_sys::FC_ASPECT;
-pub use fontconfig_sys::FC_AUTOHINT;
-pub use fontconfig_sys::FC_CACHE_SUFFIX;
-pub use fontconfig_sys::FC_CAPABILITY;
-pub use fontconfig_sys::FC_CHARSET;
-pub use fontconfig_sys::FC_CHARWIDTH;
-pub use fontconfig_sys::FC_CHAR_HEIGHT;
-pub use fontconfig_sys::FC_CHAR_WIDTH;
-pub use fontconfig_sys::FC_COLOR;
-pub use fontconfig_sys::FC_DECORATIVE;
-pub use fontconfig_sys::FC_DIR_CACHE_FILE;
-pub use fontconfig_sys::FC_DPI;
-pub use fontconfig_sys::FC_EMBEDDED_BITMAP;
-pub use fontconfig_sys::FC_EMBOLDEN;
-pub use fontconfig_sys::FC_FAMILY;
-pub use fontconfig_sys::FC_FAMILYLANG;
-pub use fontconfig_sys::FC_FILE;
-pub use fontconfig_sys::FC_FONTFORMAT;
-pub use fontconfig_sys::FC_FONTVERSION;
-pub use fontconfig_sys::FC_FONT_FEATURES;
-pub use fontconfig_sys::FC_FONT_HAS_HINT;
-pub use fontconfig_sys::FC_FONT_VARIATIONS;
-pub use fontconfig_sys::FC_FOUNDRY;
-pub use fontconfig_sys::FC_FT_FACE;
-pub use fontconfig_sys::FC_FULLNAME;
-pub use fontconfig_sys::FC_FULLNAMELANG;
-pub use fontconfig_sys::FC_GLOBAL_ADVANCE;
-pub use fontconfig_sys::FC_HASH;
-pub use fontconfig_sys::FC_HINTING;
-pub use fontconfig_sys::FC_HINT_STYLE;
-pub use fontconfig_sys::FC_INDEX;
-pub use fontconfig_sys::FC_LANG;
-pub use fontconfig_sys::FC_LCD_FILTER;
-pub use fontconfig_sys::FC_MATRIX;
-pub use fontconfig_sys::FC_MINSPACE;
-pub use fontconfig_sys::FC_NAMELANG;
-pub use fontconfig_sys::FC_OUTLINE;
-pub use fontconfig_sys::FC_PIXEL_SIZE;
-pub use fontconfig_sys::FC_POSTSCRIPT_NAME;
-pub use fontconfig_sys::FC_PRGNAME;
-pub use fontconfig_sys::FC_RASTERIZER;
-pub use fontconfig_sys::FC_RGBA;
-pub use fontconfig_sys::FC_SCALABLE;
-pub use fontconfig_sys::FC_SCALE;
-pub use fontconfig_sys::FC_SIZE;
-pub use fontconfig_sys::FC_SLANT;
-pub use fontconfig_sys::FC_SOURCE;
-pub use fontconfig_sys::FC_SPACING;
-pub use fontconfig_sys::FC_STYLE;
-pub use fontconfig_sys::FC_STYLELANG;
-pub use fontconfig_sys::FC_SYMBOL;
-pub use fontconfig_sys::FC_USER_CACHE_FILE;
-pub use fontconfig_sys::FC_VARIABLE;
-pub use fontconfig_sys::FC_VERTICAL_LAYOUT;
-pub use fontconfig_sys::FC_WEIGHT;
-pub use fontconfig_sys::FC_WIDTH;
 use std::str::FromStr;
+pub use sys::FC_ANTIALIAS;
+pub use sys::FC_ASPECT;
+pub use sys::FC_AUTOHINT;
+pub use sys::FC_CACHE_SUFFIX;
+pub use sys::FC_CAPABILITY;
+pub use sys::FC_CHARSET;
+pub use sys::FC_CHARWIDTH;
+pub use sys::FC_CHAR_HEIGHT;
+pub use sys::FC_CHAR_WIDTH;
+pub use sys::FC_COLOR;
+pub use sys::FC_DECORATIVE;
+pub use sys::FC_DIR_CACHE_FILE;
+pub use sys::FC_DPI;
+pub use sys::FC_EMBEDDED_BITMAP;
+pub use sys::FC_EMBOLDEN;
+pub use sys::FC_FAMILY;
+pub use sys::FC_FAMILYLANG;
+pub use sys::FC_FILE;
+pub use sys::FC_FONTFORMAT;
+pub use sys::FC_FONTVERSION;
+pub use sys::FC_FONT_FEATURES;
+pub use sys::FC_FONT_HAS_HINT;
+pub use sys::FC_FONT_VARIATIONS;
+pub use sys::FC_FOUNDRY;
+pub use sys::FC_FT_FACE;
+pub use sys::FC_FULLNAME;
+pub use sys::FC_FULLNAMELANG;
+pub use sys::FC_GLOBAL_ADVANCE;
+pub use sys::FC_HASH;
+pub use sys::FC_HINTING;
+pub use sys::FC_HINT_STYLE;
+pub use sys::FC_INDEX;
+pub use sys::FC_LANG;
+pub use sys::FC_LCD_FILTER;
+pub use sys::FC_MATRIX;
+pub use sys::FC_MINSPACE;
+pub use sys::FC_NAMELANG;
+pub use sys::FC_OUTLINE;
+pub use sys::FC_PIXEL_SIZE;
+pub use sys::FC_POSTSCRIPT_NAME;
+pub use sys::FC_PRGNAME;
+pub use sys::FC_RASTERIZER;
+pub use sys::FC_RGBA;
+pub use sys::FC_SCALABLE;
+pub use sys::FC_SCALE;
+pub use sys::FC_SIZE;
+pub use sys::FC_SLANT;
+pub use sys::FC_SOURCE;
+pub use sys::FC_SPACING;
+pub use sys::FC_STYLE;
+pub use sys::FC_STYLELANG;
+pub use sys::FC_SYMBOL;
+pub use sys::FC_USER_CACHE_FILE;
+pub use sys::FC_VARIABLE;
+pub use sys::FC_VERTICAL_LAYOUT;
+pub use sys::FC_WEIGHT;
+pub use sys::FC_WIDTH;
 
 #[allow(non_upper_case_globals)]
 const FcTrue: FcBool = 1;
@@ -101,7 +101,7 @@ pub enum FontFormat {
 }
 
 pub fn init() -> bool {
-    unsafe { fontconfig_sys::FcInit() == FcTrue }
+    unsafe { sys::FcInit() == FcTrue }
 }
 
 /// A very high-level view of a font, only concerned with the name and its file location.
@@ -125,11 +125,11 @@ impl Font {
     pub fn find(family: &str, style: Option<&str>) -> Option<Font> {
         let mut pat = Pattern::new();
         let family = CString::new(family).ok()?;
-        pat.add_string(fontconfig_sys::FC_FAMILY.as_cstr(), &family);
+        pat.add_string(sys::FC_FAMILY.as_cstr(), &family);
 
         if let Some(style) = style {
             let style = CString::new(style).ok()?;
-            pat.add_string(fontconfig_sys::FC_STYLE.as_cstr(), &style);
+            pat.add_string(sys::FC_STYLE.as_cstr(), &style);
         }
 
         let font_match = pat.font_match();
@@ -156,7 +156,7 @@ pub struct Pattern {
 
 impl Pattern {
     pub fn new() -> Pattern {
-        let pat = unsafe { fontconfig_sys::FcPatternCreate() };
+        let pat = unsafe { sys::FcPatternCreate() };
         assert!(!pat.is_null());
 
         Pattern { pat }
@@ -165,7 +165,7 @@ impl Pattern {
     /// Create a `Pattern` from a raw fontconfig FcPattern pointer. The pattern is referenced.
     pub fn from_pattern(pat: *mut FcPattern) -> Pattern {
         unsafe {
-            fontconfig_sys::FcPatternReference(pat);
+            sys::FcPatternReference(pat);
         }
 
         Pattern { pat: pat }
@@ -178,16 +178,16 @@ impl Pattern {
     /// [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html
     pub fn add_string(&mut self, name: &CStr, val: &CStr) {
         unsafe {
-            fontconfig_sys::FcPatternAddString(self.pat, name.as_ptr(), val.as_ptr() as *const u8);
+            sys::FcPatternAddString(self.pat, name.as_ptr(), val.as_ptr() as *const u8);
         }
     }
 
     /// Get string the value for a key from this pattern.
     pub fn get_string<'a>(&'a self, name: &'a CStr) -> Option<&'a str> {
         unsafe {
-            let mut ret: *mut fontconfig_sys::FcChar8 = ptr::null_mut();
-            if fontconfig_sys::FcPatternGetString(self.pat, name.as_ptr(), 0, &mut ret as *mut _)
-                == fontconfig_sys::FcResultMatch
+            let mut ret: *mut sys::FcChar8 = ptr::null_mut();
+            if sys::FcPatternGetString(self.pat, name.as_ptr(), 0, &mut ret as *mut _)
+                == sys::FcResultMatch
             {
                 let cstr = CStr::from_ptr(ret as *const i8);
                 Some(cstr.to_str().unwrap())
@@ -201,8 +201,8 @@ impl Pattern {
     pub fn get_int(&self, name: &CStr) -> Option<i32> {
         unsafe {
             let mut ret: i32 = 0;
-            if fontconfig_sys::FcPatternGetInteger(self.pat, name.as_ptr(), 0, &mut ret as *mut i32)
-                == fontconfig_sys::FcResultMatch
+            if sys::FcPatternGetInteger(self.pat, name.as_ptr(), 0, &mut ret as *mut i32)
+                == sys::FcResultMatch
             {
                 Some(ret)
             } else {
@@ -215,23 +215,19 @@ impl Pattern {
     #[allow(dead_code)]
     pub fn print(&self) {
         unsafe {
-            fontconfig_sys::FcPatternPrint(&*self.pat);
+            sys::FcPatternPrint(&*self.pat);
         }
     }
 
     fn default_substitute(&mut self) {
         unsafe {
-            fontconfig_sys::FcDefaultSubstitute(self.pat);
+            sys::FcDefaultSubstitute(self.pat);
         }
     }
 
     fn config_substitute(&mut self) {
         unsafe {
-            fontconfig_sys::FcConfigSubstitute(
-                ptr::null_mut(),
-                self.pat,
-                fontconfig_sys::FcMatchPattern,
-            );
+            sys::FcConfigSubstitute(ptr::null_mut(), self.pat, sys::FcMatchPattern);
         }
     }
 
@@ -241,12 +237,8 @@ impl Pattern {
         self.config_substitute();
 
         unsafe {
-            let mut res = fontconfig_sys::FcResultNoMatch;
-            Pattern::from_pattern(fontconfig_sys::FcFontMatch(
-                ptr::null_mut(),
-                self.pat,
-                &mut res,
-            ))
+            let mut res = sys::FcResultNoMatch;
+            Pattern::from_pattern(sys::FcFontMatch(ptr::null_mut(), self.pat, &mut res))
         }
     }
 
@@ -290,17 +282,17 @@ impl Pattern {
 
 impl std::fmt::Debug for Pattern {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let fcstr = unsafe { fontconfig_sys::FcNameUnparse(self.pat) };
+        let fcstr = unsafe { sys::FcNameUnparse(self.pat) };
         let fcstr = unsafe { CStr::from_ptr(fcstr as *const i8) };
         let result = write!(f, "{:?}", fcstr);
-        unsafe { fontconfig_sys::FcStrFree(fcstr.as_ptr() as *mut u8) };
+        unsafe { sys::FcStrFree(fcstr.as_ptr() as *mut u8) };
         result
     }
 }
 
 impl Clone for Pattern {
     fn clone(&self) -> Self {
-        let clone = unsafe { fontconfig_sys::FcPatternDuplicate(self.pat) };
+        let clone = unsafe { sys::FcPatternDuplicate(self.pat) };
         Pattern { pat: clone }
     }
 }
@@ -308,34 +300,34 @@ impl Clone for Pattern {
 impl Drop for Pattern {
     fn drop(&mut self) {
         unsafe {
-            fontconfig_sys::FcPatternDestroy(self.pat);
+            sys::FcPatternDestroy(self.pat);
         }
     }
 }
 
 pub struct FontSet {
-    fcset: *mut fontconfig_sys::FcFontSet,
+    fcset: *mut sys::FcFontSet,
 }
 
 impl FontSet {
     pub fn new() -> FontSet {
-        let fcset = unsafe { fontconfig_sys::FcFontSetCreate() };
+        let fcset = unsafe { sys::FcFontSetCreate() };
         FontSet { fcset: fcset }
     }
 
-    pub fn from_raw(raw_set: *mut fontconfig_sys::FcFontSet) -> FontSet {
+    pub fn from_raw(raw_set: *mut sys::FcFontSet) -> FontSet {
         FontSet { fcset: raw_set }
     }
 
     pub fn add_pattern(&mut self, pat: Pattern) {
         unsafe {
-            fontconfig_sys::FcFontSetAdd(self.fcset, pat.pat);
+            sys::FcFontSetAdd(self.fcset, pat.pat);
             mem::forget(pat);
         }
     }
 
     pub fn print(&self) {
-        unsafe { fontconfig_sys::FcFontSetPrint(self.fcset) };
+        unsafe { sys::FcFontSetPrint(self.fcset) };
     }
 }
 
@@ -354,42 +346,42 @@ impl Deref for FontSet {
 
 impl Drop for FontSet {
     fn drop(&mut self) {
-        unsafe { fontconfig_sys::FcFontSetDestroy(self.fcset) }
+        unsafe { sys::FcFontSetDestroy(self.fcset) }
     }
 }
 
 pub fn list_fonts(pattern: &Pattern, objects: Option<&ObjectSet>) -> FontSet {
     let os = objects.map(|o| o.fcset).unwrap_or(ptr::null_mut());
-    let ptr = unsafe { fontconfig_sys::FcFontList(ptr::null_mut(), pattern.pat, os) };
+    let ptr = unsafe { sys::FcFontList(ptr::null_mut(), pattern.pat, os) };
     FontSet::from_raw(ptr)
 }
 
 pub struct ObjectSet {
-    fcset: *mut fontconfig_sys::FcObjectSet,
+    fcset: *mut sys::FcObjectSet,
 }
 
 impl ObjectSet {
     pub fn new() -> ObjectSet {
-        let fcset = unsafe { fontconfig_sys::FcObjectSetCreate() };
+        let fcset = unsafe { sys::FcObjectSetCreate() };
         assert!(!fcset.is_null());
 
         ObjectSet { fcset }
     }
 
-    pub fn from_raw(raw_set: *mut fontconfig_sys::FcObjectSet) -> ObjectSet {
+    pub fn from_raw(raw_set: *mut sys::FcObjectSet) -> ObjectSet {
         assert!(!raw_set.is_null());
         ObjectSet { fcset: raw_set }
     }
 
     pub fn add(&mut self, name: &CStr) {
-        let res = unsafe { fontconfig_sys::FcObjectSetAdd(self.fcset, name.as_ptr()) };
+        let res = unsafe { sys::FcObjectSetAdd(self.fcset, name.as_ptr()) };
         assert_eq!(res, FcTrue);
     }
 }
 
 impl Drop for ObjectSet {
     fn drop(&mut self) {
-        unsafe { fontconfig_sys::FcObjectSetDestroy(self.fcset) }
+        unsafe { sys::FcObjectSetDestroy(self.fcset) }
     }
 }
 

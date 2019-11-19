@@ -1,5 +1,4 @@
 [package]
-
 name = "fontconfig"
 version = "0.1.0"
 authors = [
@@ -16,4 +15,3 @@ description = "Wrapper around freedesktop's fontconfig library"
 [dependencies.servo-fontconfig]
 git = "https://github.com/yeslogic/rust-fontconfig.git"
 branch = "optional-fontconfig-sys"
-default-features = false

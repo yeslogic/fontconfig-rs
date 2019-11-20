@@ -8,19 +8,21 @@
 //!
 //! [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/t1.html
 
-extern crate fontconfig_sys;
-extern crate log;
+extern crate fontconfig_sys as fontconfig;
 
-use fontconfig_sys::FcPattern;
+use crate::fontconfig::fontconfig as fontconfig_sys;
 
-use std::ffi::{CString, CStr};
+use crate::fontconfig_sys::FcPattern;
+
+use std::ffi::{CStr, CString};
 use std::mem;
-use std::ptr;
-use std::sync::{Once, ONCE_INIT};
+
 use std::path::PathBuf;
+use std::ptr;
+use std::sync::{Once};
 use std::ops::Deref;
 
-static FC_INIT: Once = ONCE_INIT;
+static FC_INIT: Once = Once::new();
 
 fn fc_init() {
     FC_INIT.call_once(|| assert_eq!(unsafe { fontconfig_sys::FcInit() }, 1));
@@ -55,11 +57,9 @@ impl Font {
         let font_match = pat.font_match();
 
         font_match.name().and_then(|name| {
-            font_match.filename().map(|filename| {
-                Font {
-                    name: name.to_owned(),
-                    path: PathBuf::from(filename),
-                }
+            font_match.filename().map(|filename| Font {
+                name: name.to_owned(),
+                path: PathBuf::from(filename),
             })
         })
     }
@@ -91,9 +91,7 @@ impl Pattern {
             fontconfig_sys::FcPatternReference(pat);
         }
 
-        Pattern {
-            pat: pat,
-        }
+        Pattern { pat: pat }
     }
 
     /// Add a key-value pair to this pattern.
@@ -106,9 +104,11 @@ impl Pattern {
         let c_val = CString::new(val).unwrap();
 
         unsafe {
-            fontconfig_sys::FcPatternAddString(self.pat,
-                                               c_name.as_ptr(),
-                                               c_val.as_ptr() as *const u8);
+            fontconfig_sys::FcPatternAddString(
+                self.pat,
+                c_name.as_ptr(),
+                c_val.as_ptr() as *const u8,
+            );
         }
     }
 
@@ -117,11 +117,9 @@ impl Pattern {
         let c_name = CString::new(name).unwrap();
         unsafe {
             let mut ret: *mut fontconfig_sys::FcChar8 = mem::uninitialized();
-            if fontconfig_sys::FcPatternGetString(self.pat,
-                                                  c_name.as_ptr(),
-                                                  0,
-                                                  &mut ret as *mut _) ==
-               fontconfig_sys::FcResult::FcResultMatch {
+            if fontconfig_sys::FcPatternGetString(self.pat, c_name.as_ptr(), 0, &mut ret as *mut _)
+                == fontconfig_sys::FcResultMatch
+            {
                 let cstr = CStr::from_ptr(ret as *const i8);
                 Some(cstr.to_str().unwrap())
             } else {
@@ -135,11 +133,13 @@ impl Pattern {
         let c_name = CString::new(name).unwrap();
         unsafe {
             let mut ret: i32 = 0;
-            if fontconfig_sys::FcPatternGetInteger(self.pat,
-                                                   c_name.as_ptr(),
-                                                   0,
-                                                   &mut ret as *mut i32) ==
-               fontconfig_sys::FcResult::FcResultMatch {
+            if fontconfig_sys::FcPatternGetInteger(
+                self.pat,
+                c_name.as_ptr(),
+                0,
+                &mut ret as *mut i32,
+            ) == fontconfig_sys::FcResultMatch
+            {
                 Some(ret)
             } else {
                 None
@@ -163,9 +163,11 @@ impl Pattern {
 
     fn config_substitute(&mut self) {
         unsafe {
-            fontconfig_sys::FcConfigSubstitute(ptr::null_mut(),
-                                               self.pat,
-                                               fontconfig_sys::_FcMatchKind::FcMatchPattern);
+            fontconfig_sys::FcConfigSubstitute(
+                ptr::null_mut(),
+                self.pat,
+                fontconfig_sys::FcMatchPattern,
+            );
         }
     }
 
@@ -175,8 +177,12 @@ impl Pattern {
         self.config_substitute();
 
         unsafe {
-            let mut res = fontconfig_sys::FcResult::FcResultNoMatch;
-            Pattern::from_pattern(fontconfig_sys::FcFontMatch(ptr::null_mut(), self.pat, &mut res))
+            let mut res = fontconfig_sys::FcResultNoMatch;
+            Pattern::from_pattern(fontconfig_sys::FcFontMatch(
+                ptr::null_mut(),
+                self.pat,
+                &mut res,
+            ))
         }
     }
 
@@ -253,8 +259,8 @@ impl Deref for FontSet {
 
     fn deref(&self) -> &[Pattern] {
         unsafe {
-            let raw_fs = *self.fcset;
-            let slce: &[*mut FcPattern] =  std::slice::from_raw_parts(raw_fs.fonts, raw_fs.nfont as usize);
+            let raw_fs = self.fcset;
+            let slce: &[*mut FcPattern] =  std::slice::from_raw_parts((*raw_fs).fonts, (*raw_fs).nfont as usize);
             mem::transmute(slce)
         }
     }
@@ -268,9 +274,7 @@ impl Drop for FontSet {
 
 pub fn list_fonts(pattern: &Pattern) -> FontSet {
     fc_init();
-    let ptr = unsafe {
-        fontconfig_sys::FcFontList(ptr::null_mut(), pattern.pat, ptr::null_mut())
-    };
+    let ptr = unsafe { fontconfig_sys::FcFontList(ptr::null_mut(), pattern.pat, ptr::null_mut()) };
     FontSet::from_raw(ptr)
 }
 
@@ -287,7 +291,9 @@ mod tests {
     #[test]
     fn test_find_font() {
         Font::find("dejavu sans", None).unwrap().print_debug();
-        Font::find("dejavu sans", Some("oblique")).unwrap().print_debug();
+        Font::find("dejavu sans", Some("oblique"))
+            .unwrap()
+            .print_debug();
     }
 
     #[test]
@@ -297,5 +303,4 @@ mod tests {
             println!("{:?}", pattern.name());
         }
     }
-
 }

@@ -14,7 +14,10 @@ links = "fontconfig"
 
 [lib]
 name = "fontconfig_sys"
-path = "lib.rs"
+
+[dependencies]
+const-cstr = "0.3"
+libc = "0.2"
 
 [build-dependencies]
-pkg-config = "*"
+pkg-config = "0.3"

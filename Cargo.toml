@@ -1,17 +1,18 @@
 [package]
 
 name = "fontconfig"
-version = "0.0.1"
-authors = ["Austin Bonander <austin.bonander@gmail.com>"]
+version = "0.1.0"
+authors = [
+    "Austin Bonander <austin.bonander@gmail.com>",
+    "Manuel Reinhardt <manuel.jr16@gmail.com>",
+    "YesLogic Pty. Ltd. <info@yeslogic.com>"
+]
 license = "MIT"
 keywords = ["font", "search", "wrapper"]
-repository = "https://github.com/cybergeek94/fontconfig-rs"
-homepage = "https://github.com/cybergeek94/fontconfig-rs"
+repository = "https://github.com/yeslogic/fontconfig-rs"
+homepage = "https://github.com/yeslogic/fontconfig-rs"
 description = "Wrapper around freedesktop's fontconfig library"
 
 [dependencies.fontconfig-sys]
 path = "fontconfig-sys"
-version = "~2.11.1"
 
-[dependencies]
-log = "*"

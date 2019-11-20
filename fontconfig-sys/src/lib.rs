@@ -13,8 +13,6 @@
 
 #[macro_use]
 extern crate const_cstr;
-#[cfg(feature = "fontconfig-sys")]
-extern crate fontconfig_sys;
 extern crate libc;
 
 pub mod fontconfig;

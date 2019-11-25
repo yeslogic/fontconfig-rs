@@ -10,74 +10,18 @@
 
 extern crate fontconfig_sys;
 
-pub use crate::fontconfig_sys::fontconfig as sys;
+use crate::fontconfig_sys::fontconfig as sys;
 
 use std::ffi::{CStr, CString};
 use std::mem;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::ptr;
+use std::str::FromStr;
 
 use sys::{FcBool, FcPattern};
 
-use std::str::FromStr;
-pub use sys::FC_ANTIALIAS;
-pub use sys::FC_ASPECT;
-pub use sys::FC_AUTOHINT;
-pub use sys::FC_CACHE_SUFFIX;
-pub use sys::FC_CAPABILITY;
-pub use sys::FC_CHARSET;
-pub use sys::FC_CHARWIDTH;
-pub use sys::FC_CHAR_HEIGHT;
-pub use sys::FC_CHAR_WIDTH;
-pub use sys::FC_COLOR;
-pub use sys::FC_DECORATIVE;
-pub use sys::FC_DIR_CACHE_FILE;
-pub use sys::FC_DPI;
-pub use sys::FC_EMBEDDED_BITMAP;
-pub use sys::FC_EMBOLDEN;
-pub use sys::FC_FAMILY;
-pub use sys::FC_FAMILYLANG;
-pub use sys::FC_FILE;
-pub use sys::FC_FONTFORMAT;
-pub use sys::FC_FONTVERSION;
-pub use sys::FC_FONT_FEATURES;
-pub use sys::FC_FONT_HAS_HINT;
-pub use sys::FC_FONT_VARIATIONS;
-pub use sys::FC_FOUNDRY;
-pub use sys::FC_FT_FACE;
-pub use sys::FC_FULLNAME;
-pub use sys::FC_FULLNAMELANG;
-pub use sys::FC_GLOBAL_ADVANCE;
-pub use sys::FC_HASH;
-pub use sys::FC_HINTING;
-pub use sys::FC_HINT_STYLE;
-pub use sys::FC_INDEX;
-pub use sys::FC_LANG;
-pub use sys::FC_LCD_FILTER;
-pub use sys::FC_MATRIX;
-pub use sys::FC_MINSPACE;
-pub use sys::FC_NAMELANG;
-pub use sys::FC_OUTLINE;
-pub use sys::FC_PIXEL_SIZE;
-pub use sys::FC_POSTSCRIPT_NAME;
-pub use sys::FC_PRGNAME;
-pub use sys::FC_RASTERIZER;
-pub use sys::FC_RGBA;
-pub use sys::FC_SCALABLE;
-pub use sys::FC_SCALE;
-pub use sys::FC_SIZE;
-pub use sys::FC_SLANT;
-pub use sys::FC_SOURCE;
-pub use sys::FC_SPACING;
-pub use sys::FC_STYLE;
-pub use sys::FC_STYLELANG;
-pub use sys::FC_SYMBOL;
-pub use sys::FC_USER_CACHE_FILE;
-pub use sys::FC_VARIABLE;
-pub use sys::FC_VERTICAL_LAYOUT;
-pub use sys::FC_WEIGHT;
-pub use sys::FC_WIDTH;
+pub use sys::constants::*;
 
 #[allow(non_upper_case_globals)]
 const FcTrue: FcBool = 1;
@@ -125,11 +69,11 @@ impl Font {
     pub fn find(family: &str, style: Option<&str>) -> Option<Font> {
         let mut pat = Pattern::new();
         let family = CString::new(family).ok()?;
-        pat.add_string(sys::FC_FAMILY.as_cstr(), &family);
+        pat.add_string(FC_FAMILY.as_cstr(), &family);
 
         if let Some(style) = style {
             let style = CString::new(style).ok()?;
-            pat.add_string(sys::FC_STYLE.as_cstr(), &style);
+            pat.add_string(FC_STYLE.as_cstr(), &style);
         }
 
         let font_match = pat.font_match();

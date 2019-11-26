@@ -1,0 +1,25 @@
+language: rust
+
+addons:
+  apt:
+    update: true
+
+rust:
+  - nightly
+  - beta
+  - stable
+  - 1.38.0
+
+jobs:
+  allow_failures:
+    - rust: nightly
+
+before_install:
+  - sudo apt-get -y install libfontconfig1-dev
+
+before_script:
+    - rustup component add rustfmt
+
+script:
+  - cargo fmt -- --check
+  - cargo test

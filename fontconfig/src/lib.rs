@@ -87,11 +87,12 @@ pub fn init() -> bool {
 /// A very high-level view of a font, only concerned with the name and its file location.
 ///
 /// ##Example
-/// ```rust,ignore
-/// let font = Font::find("freeserif", Some("italic")).unwrap();
+/// ```rust
+/// use fontconfig::Font;
+///
+/// let font = Font::find("sans-serif", Some("italic")).unwrap();
 /// println!("Name: {}\nPath: {}", font.name, font.path.display());
 /// ```
-#[allow(dead_code)]
 pub struct Font {
     /// The true name of this font
     pub name: String,

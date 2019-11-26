@@ -1,12 +1,41 @@
-//! A wrapper around freedesktop's `fontconfig` utility, for locating fontfiles on a
-//! Linux-based system. Requires `libfontconfig` to be installed.
-//!
-//! Use `Font` for a high-level search by family name and optional style (e.g. "FreeSerif"
-//! and "italic"), and `Pattern` for a more in-depth search.
+//! A wrapper around [freedesktop.org's fontconfig library][homepage], for locating fonts on a UNIX like systems such as Linux and FreeBSD. Requires fontconfig to be installed.
 //!
 //! See the [fontconfig developer reference][1] for more information.
 //!
 //! [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/t1.html
+//!
+//! Dependencies
+//! ============
+//!
+//! * Arch Linux: `fontconfig`
+//! * Debian-based systems: `libfontconfig1-dev`
+//! * FreeBSD: `fontconfig`
+//! * Void Linux: `fontconfig-devel`
+//!
+//! Usage
+//! =====
+//!
+//! Cargo.toml:
+//!
+//! ```toml
+//! [dependencies]
+//! fontconfig = "0.1.0"
+//! ```
+//!
+//! main.rs:
+//!
+//! ```
+//! extern crate fontconfig;
+//!
+//! use fontconfig::Font;
+//!
+//! fn main() {
+//!     // `Font::find()` returns `Option` (will rarely be `None` but still could be)
+//!     let font = Font::find("freeserif", None).unwrap();
+//!     // `name` is a `String`, `path` is a `Path`
+//!     println!("Name: {}\nPath: {}", font.name, font.path.display());
+//! }
+//! ```
 
 extern crate fontconfig_sys;
 
@@ -25,12 +54,16 @@ pub use sys::constants::*;
 
 #[allow(non_upper_case_globals)]
 const FcTrue: FcBool = 1;
-#[allow(non_upper_case_globals)]
+#[allow(non_upper_case_globals, dead_code)]
 const FcFalse: FcBool = 0;
 
+/// Error type returned from Pattern::format.
+///
+/// The error holds the name of the unknown format.
 #[derive(Debug)]
-pub struct UnknownFontFormat(String);
+pub struct UnknownFontFormat(pub String);
 
+/// The format of a font matched by Fontconfig.
 #[derive(Eq, PartialEq)]
 pub enum FontFormat {
     TrueType,
@@ -44,6 +77,9 @@ pub enum FontFormat {
     WindowsFNT,
 }
 
+/// Initialise Fontconfig.
+///
+/// Can be safely called more than once. If initialisation fails, returns `false`.
 pub fn init() -> bool {
     unsafe { sys::FcInit() == FcTrue }
 }
@@ -95,10 +131,12 @@ impl Font {
 /// A safe wrapper around fontconfig's `FcPattern`.
 #[repr(C)]
 pub struct Pattern {
+    /// Raw pointer to `FcPattern`
     pub pat: *mut FcPattern,
 }
 
 impl Pattern {
+    /// Create a new `Pattern`.
     pub fn new() -> Pattern {
         let pat = unsafe { sys::FcPatternCreate() };
         assert!(!pat.is_null());
@@ -156,7 +194,6 @@ impl Pattern {
     }
 
     /// Print this pattern to stdout with all its values.
-    #[allow(dead_code)]
     pub fn print(&self) {
         unsafe {
             sys::FcPatternPrint(&*self.pat);
@@ -249,20 +286,26 @@ impl Drop for Pattern {
     }
 }
 
+/// Wrapper around `FcFontSet`.
 pub struct FontSet {
     fcset: *mut sys::FcFontSet,
 }
 
 impl FontSet {
+    /// Create a new, empty `FontSet`.
     pub fn new() -> FontSet {
         let fcset = unsafe { sys::FcFontSetCreate() };
         FontSet { fcset: fcset }
     }
 
+    /// Wrap an existing `FcFontSet`.
+    ///
+    /// This returned wrapper assumes ownership of the `FcFontSet`.
     pub fn from_raw(raw_set: *mut sys::FcFontSet) -> FontSet {
         FontSet { fcset: raw_set }
     }
 
+    /// Add a `Pattern` to this `FontSet`.
     pub fn add_pattern(&mut self, pat: Pattern) {
         unsafe {
             sys::FcFontSetAdd(self.fcset, pat.pat);
@@ -270,6 +313,7 @@ impl FontSet {
         }
     }
 
+    /// Print this `FontSet` to stdout.
     pub fn print(&self) {
         unsafe { sys::FcFontSetPrint(self.fcset) };
     }
@@ -294,17 +338,20 @@ impl Drop for FontSet {
     }
 }
 
+/// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
 pub fn list_fonts(pattern: &Pattern, objects: Option<&ObjectSet>) -> FontSet {
     let os = objects.map(|o| o.fcset).unwrap_or(ptr::null_mut());
     let ptr = unsafe { sys::FcFontList(ptr::null_mut(), pattern.pat, os) };
     FontSet::from_raw(ptr)
 }
 
+/// Wrapper around `FcObjectSet`.
 pub struct ObjectSet {
     fcset: *mut sys::FcObjectSet,
 }
 
 impl ObjectSet {
+    /// Create a new, empty `ObjectSet`.
     pub fn new() -> ObjectSet {
         let fcset = unsafe { sys::FcObjectSetCreate() };
         assert!(!fcset.is_null());
@@ -312,11 +359,15 @@ impl ObjectSet {
         ObjectSet { fcset }
     }
 
+    /// Wrap an existing `FcObjectSet`.
+    ///
+    /// The `FcObjectSet` must not be null. This method assumes ownership of the `FcObjectSet`.
     pub fn from_raw(raw_set: *mut sys::FcObjectSet) -> ObjectSet {
         assert!(!raw_set.is_null());
         ObjectSet { fcset: raw_set }
     }
 
+    /// Add a string to the `ObjectSet`.
     pub fn add(&mut self, name: &CStr) {
         let res = unsafe { sys::FcObjectSetAdd(self.fcset, name.as_ptr()) };
         assert_eq!(res, FcTrue);

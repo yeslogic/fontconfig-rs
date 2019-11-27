@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 //! A wrapper around [freedesktop.org's fontconfig library][homepage], for locating fonts on a UNIX like systems such as Linux and FreeBSD. Requires fontconfig to be installed.
 //!
 //! See the [fontconfig developer reference][1] for more information.
@@ -27,11 +29,12 @@
 //! ```
 //! extern crate fontconfig;
 //!
-//! use fontconfig::Font;
+//! use fontconfig::{Font, Fontconfig};
 //!
 //! fn main() {
+//!     let fc = Fontconfig::new().unwrap();
 //!     // `Font::find()` returns `Option` (will rarely be `None` but still could be)
-//!     let font = Font::find("freeserif", None).unwrap();
+//!     let font = fc.find("freeserif", None).unwrap();
 //!     // `name` is a `String`, `path` is a `Path`
 //!     println!("Name: {}\nPath: {}", font.name, font.path.display());
 //! }
@@ -43,19 +46,22 @@ use crate::fontconfig_sys::fontconfig as sys;
 
 use std::ffi::{CStr, CString};
 use std::mem;
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::ptr;
 use std::str::FromStr;
 
-use sys::{FcBool, FcPattern};
-
 pub use sys::constants::*;
+use sys::{FcBool, FcPattern};
 
 #[allow(non_upper_case_globals)]
 const FcTrue: FcBool = 1;
 #[allow(non_upper_case_globals, dead_code)]
 const FcFalse: FcBool = 0;
+
+/// Handle obtained after Fontconfig has been initialised.
+pub struct Fontconfig {
+    _initialised: (),
+}
 
 /// Error type returned from Pattern::format.
 ///
@@ -65,6 +71,7 @@ pub struct UnknownFontFormat(pub String);
 
 /// The format of a font matched by Fontconfig.
 #[derive(Eq, PartialEq)]
+#[allow(missing_docs)]
 pub enum FontFormat {
     TrueType,
     Type1,
@@ -77,20 +84,33 @@ pub enum FontFormat {
     WindowsFNT,
 }
 
-/// Initialise Fontconfig.
-///
-/// Can be safely called more than once. If initialisation fails, returns `false`.
-pub fn init() -> bool {
-    unsafe { sys::FcInit() == FcTrue }
+impl Fontconfig {
+    /// Initialise Fontconfig and return a handle allowing further interaction with the API.
+    ///
+    /// If Fontconfig fails to initialise, returns `None`.
+    pub fn new() -> Option<Self> {
+        if unsafe { sys::FcInit() == FcTrue } {
+            Some(Fontconfig { _initialised: () })
+        } else {
+            None
+        }
+    }
+
+    /// Find a font of the given `family` (e.g. Dejavu Sans, FreeSerif),
+    /// optionally filtering by `style`. Both fields are case-insensitive.
+    pub fn find(&self, family: &str, style: Option<&str>) -> Option<Font> {
+        Font::find(self, family, style)
+    }
 }
 
 /// A very high-level view of a font, only concerned with the name and its file location.
 ///
 /// ##Example
 /// ```rust
-/// use fontconfig::Font;
+/// use fontconfig::{Font, Fontconfig};
 ///
-/// let font = Font::find("sans-serif", Some("italic")).unwrap();
+/// let fc = Fontconfig::new().unwrap();
+/// let font = fc.find("sans-serif", Some("italic")).unwrap();
 /// println!("Name: {}\nPath: {}", font.name, font.path.display());
 /// ```
 pub struct Font {
@@ -101,10 +121,8 @@ pub struct Font {
 }
 
 impl Font {
-    /// Find a font of the given `family` (e.g. Dejavu Sans, FreeSerif),
-    /// optionally filtering by `style`. Both fields are case-insensitive.
-    pub fn find(family: &str, style: Option<&str>) -> Option<Font> {
-        let mut pat = Pattern::new();
+    fn find(fc: &Fontconfig, family: &str, style: Option<&str>) -> Option<Font> {
+        let mut pat = Pattern::new(fc);
         let family = CString::new(family).ok()?;
         pat.add_string(FC_FAMILY.as_cstr(), &family);
 
@@ -131,27 +149,28 @@ impl Font {
 
 /// A safe wrapper around fontconfig's `FcPattern`.
 #[repr(C)]
-pub struct Pattern {
+pub struct Pattern<'fc> {
     /// Raw pointer to `FcPattern`
     pub pat: *mut FcPattern,
+    fc: &'fc Fontconfig,
 }
 
-impl Pattern {
+impl<'fc> Pattern<'fc> {
     /// Create a new `Pattern`.
-    pub fn new() -> Pattern {
+    pub fn new(fc: &Fontconfig) -> Pattern {
         let pat = unsafe { sys::FcPatternCreate() };
         assert!(!pat.is_null());
 
-        Pattern { pat }
+        Pattern { pat, fc }
     }
 
     /// Create a `Pattern` from a raw fontconfig FcPattern pointer. The pattern is referenced.
-    pub fn from_pattern(pat: *mut FcPattern) -> Pattern {
+    pub fn from_pattern(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern {
         unsafe {
             sys::FcPatternReference(pat);
         }
 
-        Pattern { pat: pat }
+        Pattern { pat, fc }
     }
 
     /// Add a key-value pair to this pattern.
@@ -220,7 +239,10 @@ impl Pattern {
 
         unsafe {
             let mut res = sys::FcResultNoMatch;
-            Pattern::from_pattern(sys::FcFontMatch(ptr::null_mut(), self.pat, &mut res))
+            Pattern::from_pattern(
+                self.fc,
+                sys::FcFontMatch(ptr::null_mut(), self.pat, &mut res),
+            )
         }
     }
 
@@ -262,7 +284,7 @@ impl Pattern {
     }
 }
 
-impl std::fmt::Debug for Pattern {
+impl<'fc> std::fmt::Debug for Pattern<'fc> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let fcstr = unsafe { sys::FcNameUnparse(self.pat) };
         let fcstr = unsafe { CStr::from_ptr(fcstr as *const i8) };
@@ -272,14 +294,17 @@ impl std::fmt::Debug for Pattern {
     }
 }
 
-impl Clone for Pattern {
+impl<'fc> Clone for Pattern<'fc> {
     fn clone(&self) -> Self {
         let clone = unsafe { sys::FcPatternDuplicate(self.pat) };
-        Pattern { pat: clone }
+        Pattern {
+            pat: clone,
+            fc: self.fc,
+        }
     }
 }
 
-impl Drop for Pattern {
+impl<'fc> Drop for Pattern<'fc> {
     fn drop(&mut self) {
         unsafe {
             sys::FcPatternDestroy(self.pat);
@@ -288,22 +313,23 @@ impl Drop for Pattern {
 }
 
 /// Wrapper around `FcFontSet`.
-pub struct FontSet {
+pub struct FontSet<'fc> {
     fcset: *mut sys::FcFontSet,
+    fc: &'fc Fontconfig,
 }
 
-impl FontSet {
+impl<'fc> FontSet<'fc> {
     /// Create a new, empty `FontSet`.
-    pub fn new() -> FontSet {
+    pub fn new(fc: &Fontconfig) -> FontSet {
         let fcset = unsafe { sys::FcFontSetCreate() };
-        FontSet { fcset: fcset }
+        FontSet { fcset, fc }
     }
 
     /// Wrap an existing `FcFontSet`.
     ///
     /// This returned wrapper assumes ownership of the `FcFontSet`.
-    pub fn from_raw(raw_set: *mut sys::FcFontSet) -> FontSet {
-        FontSet { fcset: raw_set }
+    pub fn from_raw(fc: &Fontconfig, raw_set: *mut sys::FcFontSet) -> FontSet {
+        FontSet { fcset: raw_set, fc }
     }
 
     /// Add a `Pattern` to this `FontSet`.
@@ -318,32 +344,30 @@ impl FontSet {
     pub fn print(&self) {
         unsafe { sys::FcFontSetPrint(self.fcset) };
     }
-}
 
-impl Deref for FontSet {
-    type Target = [Pattern];
-
-    fn deref(&self) -> &[Pattern] {
-        unsafe {
-            let raw_fs = self.fcset;
-            let slce: &[*mut FcPattern] =
-                std::slice::from_raw_parts((*raw_fs).fonts, (*raw_fs).nfont as usize);
-            mem::transmute(slce)
-        }
+    /// Iterate the fonts (as `Patterns`) in this `FontSet`.
+    pub fn iter(&self) -> impl Iterator<Item = Pattern<'_>> {
+        let patterns = unsafe {
+            let fontset = self.fcset;
+            std::slice::from_raw_parts((*fontset).fonts, (*fontset).nfont as usize)
+        };
+        patterns
+            .iter()
+            .map(move |&pat| Pattern { pat, fc: self.fc })
     }
 }
 
-impl Drop for FontSet {
+impl<'fc> Drop for FontSet<'fc> {
     fn drop(&mut self) {
         unsafe { sys::FcFontSetDestroy(self.fcset) }
     }
 }
 
 /// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
-pub fn list_fonts(pattern: &Pattern, objects: Option<&ObjectSet>) -> FontSet {
+pub fn list_fonts<'fc>(pattern: &Pattern<'fc>, objects: Option<&ObjectSet>) -> FontSet<'fc> {
     let os = objects.map(|o| o.fcset).unwrap_or(ptr::null_mut());
     let ptr = unsafe { sys::FcFontList(ptr::null_mut(), pattern.pat, os) };
-    FontSet::from_raw(ptr)
+    FontSet::from_raw(pattern.fc, ptr)
 }
 
 /// Wrapper around `FcObjectSet`.
@@ -353,7 +377,7 @@ pub struct ObjectSet {
 
 impl ObjectSet {
     /// Create a new, empty `ObjectSet`.
-    pub fn new() -> ObjectSet {
+    pub fn new(_: &Fontconfig) -> ObjectSet {
         let fcset = unsafe { sys::FcObjectSetCreate() };
         assert!(!fcset.is_null());
 
@@ -363,7 +387,7 @@ impl ObjectSet {
     /// Wrap an existing `FcObjectSet`.
     ///
     /// The `FcObjectSet` must not be null. This method assumes ownership of the `FcObjectSet`.
-    pub fn from_raw(raw_set: *mut sys::FcObjectSet) -> ObjectSet {
+    pub fn from_raw(_: &Fontconfig, raw_set: *mut sys::FcObjectSet) -> ObjectSet {
         assert!(!raw_set.is_null());
         ObjectSet { fcset: raw_set }
     }
@@ -406,20 +430,22 @@ mod tests {
 
     #[test]
     fn it_works() {
-        assert!(super::init())
+        assert!(Fontconfig::new().is_some())
     }
 
     #[test]
     fn test_find_font() {
-        Font::find("dejavu sans", None).unwrap().print_debug();
-        Font::find("dejavu sans", Some("oblique"))
+        let fc = Fontconfig::new().unwrap();
+        fc.find("dejavu sans", None).unwrap().print_debug();
+        fc.find("dejavu sans", Some("oblique"))
             .unwrap()
             .print_debug();
     }
 
     #[test]
     fn test_print() {
-        let fontset = list_fonts(&Pattern::new(), None);
+        let fc = Fontconfig::new().unwrap();
+        let fontset = list_fonts(&Pattern::new(&fc), None);
         for pattern in (&fontset).iter() {
             println!("{:?}", pattern.name());
         }

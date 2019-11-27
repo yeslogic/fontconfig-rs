@@ -353,7 +353,7 @@ impl<'fc> FontSet<'fc> {
         };
         patterns
             .iter()
-            .map(move |&pat| Pattern { pat, fc: self.fc })
+            .map(move |&pat| Pattern::from_pattern(self.fc, pat))
     }
 }
 
@@ -443,11 +443,14 @@ mod tests {
     }
 
     #[test]
-    fn test_print() {
+    fn test_iter_and_print() {
         let fc = Fontconfig::new().unwrap();
         let fontset = list_fonts(&Pattern::new(&fc), None);
-        for pattern in (&fontset).iter() {
+        for pattern in fontset.iter() {
             println!("{:?}", pattern.name());
         }
+
+        // Ensure that the set can be iterated again
+        assert!(fontset.iter().count() > 0);
     }
 }

@@ -1,13 +1,20 @@
 [package]
-
 name = "yeslogic-fontconfig-sys"
 version = "2.11.1"
-authors = ["Austin Bonander <austin.bonander@gmail.com>"]
+authors = [
+    "Austin Bonander <austin.bonander@gmail.com>",
+    "The Servo Project Developers",
+    "YesLogic Pty. Ltd. <info@yeslogic.com>"
+]
 license = "MIT"
-keywords = ["fontconfig", "font", "search"]
-repository = "https://github.com/cybergeek94/fontconfig-rs"
-homepage = "https://github.com/cybergeek94/fontconfig-rs"
-description = "Bindings to fontconfig for locating font files."
+
+description = "Raw bindings to the fontconfig library"
+keywords = ["font", "bindings", "fontconfig", "sys"]
+categories = ["text-processing"]
+
+homepage = "https://github.com/yeslogic/fontconfig-rs"
+documentation = "https://docs.rs/crate/yeslogic-fontconfig-sys"
+repository = "https://github.com/yeslogic/fontconfig-rs"
 
 build = "build.rs"
 links = "fontconfig"

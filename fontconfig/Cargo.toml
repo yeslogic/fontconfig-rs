@@ -7,13 +7,19 @@ authors = [
     "YesLogic Pty. Ltd. <info@yeslogic.com>"
 ]
 license = "MIT"
-keywords = ["font", "search", "wrapper"]
-repository = "https://github.com/yeslogic/fontconfig-rs"
+readme = "README.md"
+
+description = "Safe wrapper around the fontconfig library"
+keywords = ["font", "search", "wrapper", "fontconfig"]
+categories = ["text-processing"]
+
 homepage = "https://github.com/yeslogic/fontconfig-rs"
-description = "Wrapper around freedesktop's fontconfig library"
+documentation = "https://docs.rs/crate/yeslogic-fontconfig"
+repository = "https://github.com/yeslogic/fontconfig-rs"
 
 [lib]
 name = "fontconfig"
 
 [dependencies.yeslogic-fontconfig-sys]
+version = "2.11.1"
 path = "../fontconfig-sys"

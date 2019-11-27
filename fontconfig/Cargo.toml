@@ -1,5 +1,5 @@
 [package]
-name = "fontconfig"
+name = "yeslogic-fontconfig"
 version = "0.1.0"
 authors = [
     "Austin Bonander <austin.bonander@gmail.com>",
@@ -12,6 +12,8 @@ repository = "https://github.com/yeslogic/fontconfig-rs"
 homepage = "https://github.com/yeslogic/fontconfig-rs"
 description = "Wrapper around freedesktop's fontconfig library"
 
-[dependencies.fontconfig-sys]
-path = "../fontconfig-sys"
+[lib]
+name = "fontconfig"
 
+[dependencies.yeslogic-fontconfig-sys]
+path = "../fontconfig-sys"

@@ -1,6 +1,6 @@
 [package]
 
-name = "fontconfig-sys"
+name = "yeslogic-fontconfig-sys"
 version = "2.11.1"
 authors = ["Austin Bonander <austin.bonander@gmail.com>"]
 license = "MIT"

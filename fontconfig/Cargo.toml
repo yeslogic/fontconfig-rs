@@ -7,7 +7,7 @@ authors = [
     "YesLogic Pty. Ltd. <info@yeslogic.com>"
 ]
 license = "MIT"
-readme = "README.md"
+readme = "../README.md"
 
 description = "Safe, higher-level wrapper around the Fontconfig library"
 keywords = ["font", "search", "wrapper", "fontconfig"]

@@ -8,7 +8,7 @@ authors = [
 ]
 license = "MIT"
 
-description = "Raw bindings to the fontconfig library"
+description = "Raw bindings to Fontconfig without a vendored C library"
 keywords = ["font", "bindings", "fontconfig", "sys"]
 categories = ["text-processing"]
 
@@ -18,6 +18,9 @@ repository = "https://github.com/yeslogic/fontconfig-rs"
 
 build = "build.rs"
 links = "fontconfig"
+
+[badges]
+travis-ci = { repository = "yeslogic/fontconfig-rs" }
 
 [lib]
 name = "fontconfig_sys"

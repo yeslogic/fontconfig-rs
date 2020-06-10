@@ -40,13 +40,12 @@ yeslogic-fontconfig = "0.1.0"
 main.rs:
 
 ```rust
-extern crate fontconfig;
-
-use fontconfig::Font;
+use fontconfig::Fontconfig;
 
 fn main() {
-    // `Font::find()` returns `Option` (will rarely be `None` but still could be)
-    let font = Font::find("freeserif", None).unwrap();
+    let fc = Fontconfig::new().unwrap();
+    // `Fontconfig::find()` returns `Option` (will rarely be `None` but still could be)
+    let font = fc.find("freeserif", None).unwrap();
     // `name` is a `String`, `path` is a `Path`
     println!("Name: {}\nPath: {}", font.name, font.path.display());
 }

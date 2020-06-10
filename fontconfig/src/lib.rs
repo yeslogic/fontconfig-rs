@@ -27,13 +27,11 @@
 //! main.rs:
 //!
 //! ```
-//! extern crate fontconfig;
-//!
 //! use fontconfig::{Font, Fontconfig};
 //!
 //! fn main() {
 //!     let fc = Fontconfig::new().unwrap();
-//!     // `Font::find()` returns `Option` (will rarely be `None` but still could be)
+//!     // `Fontconfig::find()` returns `Option` (will rarely be `None` but still could be)
 //!     let font = fc.find("freeserif", None).unwrap();
 //!     // `name` is a `String`, `path` is a `Path`
 //!     println!("Name: {}\nPath: {}", font.name, font.path.display());

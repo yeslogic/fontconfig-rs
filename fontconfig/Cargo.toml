@@ -1,6 +1,6 @@
 [package]
 name = "yeslogic-fontconfig"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
     "Austin Bonander <austin.bonander@gmail.com>",
     "Manuel Reinhardt <manuel.jr16@gmail.com>",
@@ -9,7 +9,7 @@ authors = [
 license = "MIT"
 readme = "../README.md"
 
-description = "Safe, higher-level wrapper around the Fontconfig library"
+description = "RENAMED: use the fontconfig crate instead."
 keywords = ["font", "search", "wrapper", "fontconfig"]
 categories = ["text-processing"]
 

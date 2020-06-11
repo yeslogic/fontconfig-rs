@@ -17,7 +17,7 @@ fontconfig-rs
 
 <br>
 
-A wrapper around [freedesktop.org's fontconfig library][homepage], for locating fonts on a UNIX like systems such as Linux and FreeBSD. Requires fontconfig to be installed.
+A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating fonts on a UNIX like systems such as Linux and FreeBSD. Requires Fontconfig to be installed.
 
 Dependencies
 ------------
@@ -30,14 +30,7 @@ Dependencies
 Usage
 -----
 
-Cargo.toml:
-
-```toml
-[dependencies]
-yeslogic-fontconfig = "0.1.0"
-```
-
-main.rs:
+`main.rs`:
 
 ```rust
 use fontconfig::Fontconfig;
@@ -51,22 +44,29 @@ fn main() {
 }
 ```
 
-You could then, for example, use `font.path` to create a `GlyphCache` from [`opengl_graphics`][gl]
-and pass it to [`conrod`][conrod].
+You could then, for example, use `font.path` to create a `GlyphCache` from [`opengl_graphics`][gl] and pass it to [`conrod`][conrod].
 
 Other Fontconfig Crates
 -----------------------
 
-* [servo-fontconfig] — This crate provides a low-level interface only.
-  It depends on [servo-fontconfig-sys], which will fall back to
-  building a vendored version of Fontconfig if a compatible version can't be found. It in turn depends on
-  [expat-sys], which does the same thing regarding a vendored version of
-  Expat. This makes it easier if you are distributing a code base that needs Fontconfig but provides less control
-  over the libraries that will be used. 
-* [fontconfig] + [fontconfig-sys] — These crates have not been updated since Dec 2014.
+* [servo-fontconfig] — This crate provides a low-level interface only. It
+  depends on [servo-fontconfig-sys], which will fall back to building a
+  vendored version of Fontconfig if a compatible version can't be found. It
+  in-turn depends on [expat-sys], which does the same thing regarding a vendored
+  version of Expat. This makes it easier if you are distributing a code base
+  that needs Fontconfig, but provides less control over the libraries that will
+  be used.
+* [fontconfig-sys] — superceded by [yeslogic-fontconfig-sys].
+* [yeslogic-fontconfig] — This crate was previously published under this name before we were given to publish it as [fontconfig].
 
-For our needs in [Prince] we wanted higher-level bindings that did not fall back on vendored
-versions of libraries, which is what the crates in this repo provide.
+For our needs in [Prince] we wanted higher-level bindings that did not fall back on vendored versions of libraries, which is what the crates in this repo provide.
+
+Credits
+-------
+
+Thanks to [Austin Bonander][abonander] for originally creating the
+`fontconfig` crate and [allowing us to publish ours under that
+name](https://github.com/abonander/fontconfig-rs/issues/9).
 
 [conrod]: https://github.com/PistonDevelopers/conrod
 [expat-sys]: https://crates.io/crates/expat-sys
@@ -77,3 +77,6 @@ versions of libraries, which is what the crates in this repo provide.
 [Prince]: https://www.princexml.com/
 [servo-fontconfig-sys]: https://crates.io/crates/servo-fontconfig-sys
 [servo-fontconfig]: https://crates.io/crates/servo-fontconfig
+[yeslogic-fontconfig]: https://crates.io/crates/yeslogic-fontconfig
+[yeslogic-fontconfig-sys]: https://crates.io/crates/yeslogic-fontconfig-sys
+[abonander]: https://github.com/abonander

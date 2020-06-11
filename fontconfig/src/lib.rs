@@ -1,8 +1,8 @@
 #![deny(missing_docs)]
 
-//! A wrapper around [freedesktop.org's fontconfig library][homepage], for locating fonts on a UNIX like systems such as Linux and FreeBSD. Requires fontconfig to be installed.
+//! A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating fonts on a UNIX like systems such as Linux and FreeBSD. Requires Fontconfig to be installed.
 //!
-//! See the [fontconfig developer reference][1] for more information.
+//! See the [Fontconfig developer reference][1] for more information.
 //!
 //! [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/t1.html
 //!
@@ -17,14 +17,7 @@
 //! Usage
 //! =====
 //!
-//! Cargo.toml:
-//!
-//! ```toml
-//! [dependencies]
-//! fontconfig = "0.1.0"
-//! ```
-//!
-//! main.rs:
+//! `main.rs`:
 //!
 //! ```
 //! use fontconfig::{Font, Fontconfig};

@@ -23,9 +23,6 @@ travis-ci = { repository = "yeslogic/fontconfig-rs" }
 [lib]
 name = "fontconfig"
 
-[dependencies]
-libc = "0.2"
-
 [dependencies.yeslogic-fontconfig-sys]
 version = "2.11.1"
 path = "../fontconfig-sys"

@@ -32,12 +32,12 @@
 //! ```
 
 extern crate fontconfig_sys;
-extern crate libc;
 
 use crate::fontconfig_sys::fontconfig as sys;
 
 use std::ffi::{CStr, CString};
 use std::mem;
+use std::os::raw::c_char;
 use std::path::PathBuf;
 use std::ptr;
 use std::str::FromStr;
@@ -183,7 +183,7 @@ impl<'fc> Pattern<'fc> {
             if sys::FcPatternGetString(self.pat, name.as_ptr(), 0, &mut ret as *mut _)
                 == sys::FcResultMatch
             {
-                let cstr = CStr::from_ptr(ret as *const libc::c_char);
+                let cstr = CStr::from_ptr(ret as *const c_char);
                 Some(cstr.to_str().unwrap())
             } else {
                 None
@@ -279,7 +279,7 @@ impl<'fc> Pattern<'fc> {
 impl<'fc> std::fmt::Debug for Pattern<'fc> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let fcstr = unsafe { sys::FcNameUnparse(self.pat) };
-        let fcstr = unsafe { CStr::from_ptr(fcstr as *const libc::c_char) };
+        let fcstr = unsafe { CStr::from_ptr(fcstr as *const c_char) };
         let result = write!(f, "{:?}", fcstr);
         unsafe { sys::FcStrFree(fcstr.as_ptr() as *mut u8) };
         result

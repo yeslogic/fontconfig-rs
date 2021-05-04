@@ -1,6 +1,6 @@
 [package]
 name = "yeslogic-fontconfig-sys"
-version = "2.11.1"
+version = "2.11.2"
 authors = [
     "Austin Bonander <austin.bonander@gmail.com>",
     "The Servo Project Developers",

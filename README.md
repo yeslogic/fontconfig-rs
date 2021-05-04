@@ -4,14 +4,14 @@ fontconfig-rs
 <div align="center">
   <a href="https://travis-ci.com/yeslogic/fontconfig-rs">
     <img src="https://travis-ci.com/yeslogic/fontconfig-rs.svg?branch=master" alt="Build Status"></a>
-  <a href="https://docs.rs/yeslogic-fontconfig">
-    <img src="https://docs.rs/yeslogic-fontconfig/badge.svg" alt="Documentation">
+  <a href="https://docs.rs/fontconfig">
+    <img src="https://docs.rs/fontconfig/badge.svg" alt="Documentation">
   </a>
-  <a href="https://crates.io/crates/yeslogic-fontconfig">
-    <img src="https://img.shields.io/crates/v/yeslogic-fontconfig.svg" alt="Version">
+  <a href="https://crates.io/crates/fontconfig">
+    <img src="https://img.shields.io/crates/v/fontconfig.svg" alt="Version">
   </a>
   <a href="https://github.com/yeslogic/fontconfig-rs/blob/master/LICENSE">
-    <img src="https://img.shields.io/crates/l/yeslogic-fontconfig.svg" alt="License">
+    <img src="https://img.shields.io/crates/l/fontconfig.svg" alt="License">
   </a>
 </div>
 

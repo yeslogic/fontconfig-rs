@@ -27,7 +27,6 @@ name = "fontconfig_sys"
 
 [dependencies]
 const-cstr = "0.3"
-libc = "0.2"
 
 [build-dependencies]
 pkg-config = "0.3"

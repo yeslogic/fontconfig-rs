@@ -22,10 +22,5 @@ jobs:
 before_install:
   - sudo apt-get -y install libfontconfig1-dev
 
-before_script:
-  # rustfmt isn't available for Rust 1.38.0 on aarch64
-  - '[ $TRAVIS_CPU_ARCH != arm64 ] && rustup component add rustfmt'
-
 script:
-  - '[ $TRAVIS_CPU_ARCH != arm64 ] && cargo fmt -- --check'
   - cargo test

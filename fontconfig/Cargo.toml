@@ -14,14 +14,11 @@ keywords = ["font", "search", "wrapper", "fontconfig"]
 categories = ["text-processing"]
 
 homepage = "https://github.com/yeslogic/fontconfig-rs"
-documentation = "https://docs.rs/crate/yeslogic-fontconfig"
+documentation = "https://docs.rs/crate/fontconfig"
 repository = "https://github.com/yeslogic/fontconfig-rs"
 
 [badges]
 travis-ci = { repository = "yeslogic/fontconfig-rs" }
-
-[lib]
-name = "fontconfig"
 
 [dependencies.yeslogic-fontconfig-sys]
 version = "2.11.1"

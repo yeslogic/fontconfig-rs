@@ -13,6 +13,5 @@
 
 #[macro_use]
 extern crate const_cstr;
-extern crate libc;
 
 pub mod fontconfig;

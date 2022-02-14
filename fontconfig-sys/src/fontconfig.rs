@@ -9,6 +9,24 @@
 
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
+#[cfg(feature = "dlopen")]
+static SONAME: &str = if cfg!(windows) {
+    "libfontconfig.dll"
+} else if cfg!(target_vendor = "apple") {
+    "libfontconfig.dylib.1"
+} else {
+    "libfontconfig.so.1"
+};
+
+#[cfg(feature = "dlopen")]
+lazy_static::lazy_static! {
+    pub static ref LIB: &'static Fc = LIB_RESULT.as_ref().unwrap();
+
+    pub static ref LIB_RESULT: Result<Fc, dlib::DlError> =
+        unsafe { Fc::open(SONAME) };
+}
 
 use std::os::raw::{c_char, c_double, c_int, c_uchar, c_uint, c_ushort, c_void};
 
@@ -286,550 +304,549 @@ pub type FcCache = struct__FcCache;
 
 pub type union_unnamed1 = c_void;
 
-extern "C" {
+dlib::external_library!(Fc, "fontconfig",
+    functions:
+        fn FcBlanksCreate() -> *mut FcBlanks,
 
-    pub fn FcBlanksCreate() -> *mut FcBlanks;
+        fn FcBlanksDestroy(*mut FcBlanks) -> (),
 
-    pub fn FcBlanksDestroy(b: *mut FcBlanks);
+        fn FcBlanksAdd(*mut FcBlanks, FcChar32) -> FcBool,
 
-    pub fn FcBlanksAdd(b: *mut FcBlanks, ucs4: FcChar32) -> FcBool;
+        fn FcBlanksIsMember(*mut FcBlanks, FcChar32) -> FcBool,
 
-    pub fn FcBlanksIsMember(b: *mut FcBlanks, ucs4: FcChar32) -> FcBool;
+        fn FcCacheDir(*mut FcCache) -> *const FcChar8,
 
-    pub fn FcCacheDir(c: *mut FcCache) -> *const FcChar8;
+        fn FcCacheCopySet(*const FcCache) -> *mut FcFontSet,
 
-    pub fn FcCacheCopySet(c: *const FcCache) -> *mut FcFontSet;
+        fn FcCacheSubdir(*const FcCache, c_int) -> *const FcChar8,
 
-    pub fn FcCacheSubdir(c: *const FcCache, i: c_int) -> *const FcChar8;
+        fn FcCacheNumSubdir(*const FcCache) -> c_int,
 
-    pub fn FcCacheNumSubdir(c: *const FcCache) -> c_int;
+        fn FcCacheNumFont(*const FcCache) -> c_int,
 
-    pub fn FcCacheNumFont(c: *const FcCache) -> c_int;
+        fn FcDirCacheUnlink(*const FcChar8, *mut FcConfig) -> FcBool,
 
-    pub fn FcDirCacheUnlink(dir: *const FcChar8, config: *mut FcConfig) -> FcBool;
+        fn FcDirCacheValid(*const FcChar8) -> FcBool,
 
-    pub fn FcDirCacheValid(cache_file: *const FcChar8) -> FcBool;
+        fn FcConfigHome() -> *mut FcChar8,
 
-    pub fn FcConfigHome() -> *mut FcChar8;
+        fn FcConfigEnableHome(FcBool) -> FcBool,
 
-    pub fn FcConfigEnableHome(enable: FcBool) -> FcBool;
+        fn FcConfigFilename(*const FcChar8) -> *mut FcChar8,
 
-    pub fn FcConfigFilename(url: *const FcChar8) -> *mut FcChar8;
+        fn FcConfigCreate() -> *mut FcConfig,
 
-    pub fn FcConfigCreate() -> *mut FcConfig;
+        fn FcConfigReference(*mut FcConfig) -> *mut FcConfig,
 
-    pub fn FcConfigReference(config: *mut FcConfig) -> *mut FcConfig;
+        fn FcConfigDestroy(*mut FcConfig) -> (),
 
-    pub fn FcConfigDestroy(config: *mut FcConfig);
+        fn FcConfigSetCurrent(*mut FcConfig) -> FcBool,
 
-    pub fn FcConfigSetCurrent(config: *mut FcConfig) -> FcBool;
+        fn FcConfigGetCurrent() -> *mut FcConfig,
 
-    pub fn FcConfigGetCurrent() -> *mut FcConfig;
+        fn FcConfigUptoDate(*mut FcConfig) -> FcBool,
 
-    pub fn FcConfigUptoDate(config: *mut FcConfig) -> FcBool;
+        fn FcConfigBuildFonts(*mut FcConfig) -> FcBool,
 
-    pub fn FcConfigBuildFonts(config: *mut FcConfig) -> FcBool;
+        fn FcConfigGetFontDirs(*mut FcConfig) -> *mut FcStrList,
 
-    pub fn FcConfigGetFontDirs(config: *mut FcConfig) -> *mut FcStrList;
+        fn FcConfigGetConfigDirs(*mut FcConfig) -> *mut FcStrList,
 
-    pub fn FcConfigGetConfigDirs(config: *mut FcConfig) -> *mut FcStrList;
+        fn FcConfigGetConfigFiles(*mut FcConfig) -> *mut FcStrList,
 
-    pub fn FcConfigGetConfigFiles(config: *mut FcConfig) -> *mut FcStrList;
+        fn FcConfigGetCache(*mut FcConfig) -> *mut FcChar8,
 
-    pub fn FcConfigGetCache(config: *mut FcConfig) -> *mut FcChar8;
+        fn FcConfigGetBlanks(*mut FcConfig) -> *mut FcBlanks,
 
-    pub fn FcConfigGetBlanks(config: *mut FcConfig) -> *mut FcBlanks;
+        fn FcConfigGetCacheDirs(*const FcConfig) -> *mut FcStrList,
 
-    pub fn FcConfigGetCacheDirs(config: *const FcConfig) -> *mut FcStrList;
+        fn FcConfigGetRescanInterval(*mut FcConfig) -> c_int,
 
-    pub fn FcConfigGetRescanInterval(config: *mut FcConfig) -> c_int;
+        fn FcConfigSetRescanInterval(*mut FcConfig, c_int) -> FcBool,
 
-    pub fn FcConfigSetRescanInterval(config: *mut FcConfig, rescanInterval: c_int) -> FcBool;
+        fn FcConfigGetFonts(*mut FcConfig, FcSetName) -> *mut FcFontSet,
 
-    pub fn FcConfigGetFonts(config: *mut FcConfig, set: FcSetName) -> *mut FcFontSet;
+        fn FcConfigAppFontAddFile(*mut FcConfig, *const FcChar8) -> FcBool,
 
-    pub fn FcConfigAppFontAddFile(config: *mut FcConfig, file: *const FcChar8) -> FcBool;
+        fn FcConfigAppFontAddDir(*mut FcConfig, *const FcChar8) -> FcBool,
 
-    pub fn FcConfigAppFontAddDir(config: *mut FcConfig, dir: *const FcChar8) -> FcBool;
+        fn FcConfigAppFontClear(*mut FcConfig) -> (),
 
-    pub fn FcConfigAppFontClear(config: *mut FcConfig);
+        fn FcConfigSubstituteWithPat(
+            *mut FcConfig,
+            *mut FcPattern,
+            *mut FcPattern,
+            FcMatchKind
+        ) -> FcBool,
 
-    pub fn FcConfigSubstituteWithPat(
-        config: *mut FcConfig,
-        p: *mut FcPattern,
-        p_pat: *mut FcPattern,
-        kind: FcMatchKind,
-    ) -> FcBool;
+        fn FcConfigSubstitute(
+            *mut FcConfig,
+            *mut FcPattern,
+            FcMatchKind
+        ) -> FcBool,
 
-    pub fn FcConfigSubstitute(
-        config: *mut FcConfig,
-        p: *mut FcPattern,
-        kind: FcMatchKind,
-    ) -> FcBool;
+        fn FcCharSetCreate() -> *mut FcCharSet,
 
-    pub fn FcCharSetCreate() -> *mut FcCharSet;
+        fn FcCharSetNew() -> *mut FcCharSet,
 
-    pub fn FcCharSetNew() -> *mut FcCharSet;
+        fn FcCharSetDestroy(*mut FcCharSet) -> (),
 
-    pub fn FcCharSetDestroy(fcs: *mut FcCharSet);
+        fn FcCharSetAddChar(*mut FcCharSet, FcChar32) -> FcBool,
 
-    pub fn FcCharSetAddChar(fcs: *mut FcCharSet, ucs4: FcChar32) -> FcBool;
+        fn FcCharSetCopy(*mut FcCharSet) -> *mut FcCharSet,
 
-    pub fn FcCharSetCopy(src: *mut FcCharSet) -> *mut FcCharSet;
+        fn FcCharSetEqual(*const FcCharSet, *const FcCharSet) -> FcBool,
 
-    pub fn FcCharSetEqual(a: *const FcCharSet, b: *const FcCharSet) -> FcBool;
+        fn FcCharSetIntersect(*const FcCharSet, *const FcCharSet) -> *mut FcCharSet,
 
-    pub fn FcCharSetIntersect(a: *const FcCharSet, b: *const FcCharSet) -> *mut FcCharSet;
+        fn FcCharSetUnion(*const FcCharSet, *const FcCharSet) -> *mut FcCharSet,
 
-    pub fn FcCharSetUnion(a: *const FcCharSet, b: *const FcCharSet) -> *mut FcCharSet;
+        fn FcCharSetSubtract(*const FcCharSet, *const FcCharSet) -> *mut FcCharSet,
 
-    pub fn FcCharSetSubtract(a: *const FcCharSet, b: *const FcCharSet) -> *mut FcCharSet;
+        fn FcCharSetMerge(*mut FcCharSet, *const FcCharSet, *mut FcBool) -> FcBool,
 
-    pub fn FcCharSetMerge(a: *mut FcCharSet, b: *const FcCharSet, changed: *mut FcBool) -> FcBool;
+        fn FcCharSetHasChar(*const FcCharSet, FcChar32) -> FcBool,
 
-    pub fn FcCharSetHasChar(fcs: *const FcCharSet, ucs4: FcChar32) -> FcBool;
+        fn FcCharSetCount(*const FcCharSet) -> FcChar32,
 
-    pub fn FcCharSetCount(a: *const FcCharSet) -> FcChar32;
+        fn FcCharSetIntersectCount(*const FcCharSet, *const FcCharSet) -> FcChar32,
 
-    pub fn FcCharSetIntersectCount(a: *const FcCharSet, b: *const FcCharSet) -> FcChar32;
+        fn FcCharSetSubtractCount(*const FcCharSet, *const FcCharSet) -> FcChar32,
 
-    pub fn FcCharSetSubtractCount(a: *const FcCharSet, b: *const FcCharSet) -> FcChar32;
+        fn FcCharSetIsSubset(*const FcCharSet, *const FcCharSet) -> FcBool,
 
-    pub fn FcCharSetIsSubset(a: *const FcCharSet, bi: *const FcCharSet) -> FcBool;
+        fn FcCharSetFirstPage(
+            *const FcCharSet,
+            *mut FcChar32,
+            *mut FcChar32
+        ) -> FcChar32,
 
-    pub fn FcCharSetFirstPage(
-        a: *const FcCharSet,
-        map: *mut FcChar32,
-        next: *mut FcChar32,
-    ) -> FcChar32;
+        fn FcCharSetNextPage(
+            *const FcCharSet,
+            *mut FcChar32,
+            *mut FcChar32
+        ) -> FcChar32,
 
-    pub fn FcCharSetNextPage(
-        a: *const FcCharSet,
-        map: *mut FcChar32,
-        next: *mut FcChar32,
-    ) -> FcChar32;
+        fn FcCharSetCoverage(
+            *const FcCharSet,
+            FcChar32,
+            *mut FcChar32
+        ) -> FcChar32,
 
-    pub fn FcCharSetCoverage(
-        a: *const FcCharSet,
-        page: FcChar32,
-        result: *mut FcChar32,
-    ) -> FcChar32;
+        fn FcValuePrint(FcValue) -> (),
 
-    pub fn FcValuePrint(v: FcValue);
+        fn FcPatternPrint(*const FcPattern) -> (),
 
-    pub fn FcPatternPrint(p: *const FcPattern);
+        fn FcFontSetPrint(*mut FcFontSet) -> (),
 
-    pub fn FcFontSetPrint(s: *mut FcFontSet);
+        fn FcDefaultSubstitute(*mut FcPattern) -> (),
 
-    pub fn FcDefaultSubstitute(pattern: *mut FcPattern);
+        fn FcFileIsDir(*const FcChar8) -> FcBool,
 
-    pub fn FcFileIsDir(file: *const FcChar8) -> FcBool;
+        fn FcFileScan(
+            *mut FcFontSet,
+            *mut FcStrSet,
+            *mut FcFileCache,
+            *mut FcBlanks,
+            *const FcChar8,
+            FcBool
+        ) -> FcBool,
 
-    pub fn FcFileScan(
-        set: *mut FcFontSet,
-        dirs: *mut FcStrSet,
-        cache: *mut FcFileCache,
-        blanks: *mut FcBlanks,
-        file: *const FcChar8,
-        force: FcBool,
-    ) -> FcBool;
+        fn FcDirScan(
+            *mut FcFontSet,
+            *mut FcStrSet,
+            *mut FcFileCache,
+            *mut FcBlanks,
+            *const FcChar8,
+            FcBool
+        ) -> FcBool,
 
-    pub fn FcDirScan(
-        set: *mut FcFontSet,
-        dirs: *mut FcStrSet,
-        cache: *mut FcFileCache,
-        blanks: *mut FcBlanks,
-        dir: *const FcChar8,
-        force: FcBool,
-    ) -> FcBool;
+        fn FcDirSave(*mut FcFontSet, *const FcStrSet, *mut FcChar8) -> FcBool,
 
-    pub fn FcDirSave(set: *mut FcFontSet, dirs: *const FcStrSet, dir: *mut FcChar8) -> FcBool;
+        fn FcDirCacheLoad(
+            *const FcChar8,
+            *mut FcConfig,
+            *mut *mut FcChar8
+        ) -> *mut FcCache,
 
-    pub fn FcDirCacheLoad(
-        dir: *const FcChar8,
-        config: *mut FcConfig,
-        cache_file: *mut *mut FcChar8,
-    ) -> *mut FcCache;
+        fn FcDirCacheRead(
+            *const FcChar8,
+            FcBool,
+            *mut FcConfig
+        ) -> *mut FcCache,
 
-    pub fn FcDirCacheRead(
-        dir: *const FcChar8,
-        force: FcBool,
-        config: *mut FcConfig,
-    ) -> *mut FcCache;
+        // fn FcDirCacheLoadFile(*mut FcChar8, *mut struct_stat) -> *mut FcCache,
 
-    //pub fn FcDirCacheLoadFile(cache_file: *mut FcChar8, file_stat: *mut struct_stat) -> *mut FcCache;
+        fn FcDirCacheUnload(*mut FcCache) -> (),
 
-    pub fn FcDirCacheUnload(cache: *mut FcCache);
+        fn FcFreeTypeQuery(
+            *const FcChar8,
+            c_int,
+            *mut FcBlanks,
+            *mut c_int
+        ) -> *mut FcPattern,
 
-    pub fn FcFreeTypeQuery(
-        file: *const FcChar8,
-        id: c_int,
-        blanks: *mut FcBlanks,
-        count: *mut c_int,
-    ) -> *mut FcPattern;
+        fn FcFontSetCreate() -> *mut FcFontSet,
 
-    pub fn FcFontSetCreate() -> *mut FcFontSet;
+        fn FcFontSetDestroy(*mut FcFontSet) -> (),
 
-    pub fn FcFontSetDestroy(s: *mut FcFontSet);
+        fn FcFontSetAdd(*mut FcFontSet, *mut FcPattern) -> FcBool,
 
-    pub fn FcFontSetAdd(s: *mut FcFontSet, font: *mut FcPattern) -> FcBool;
+        fn FcInitLoadConfig() -> *mut FcConfig,
 
-    pub fn FcInitLoadConfig() -> *mut FcConfig;
+        fn FcInitLoadConfigAndFonts() -> *mut FcConfig,
 
-    pub fn FcInitLoadConfigAndFonts() -> *mut FcConfig;
+        fn FcInit() -> FcBool,
 
-    pub fn FcInit() -> FcBool;
+        fn FcFini() -> (),
 
-    pub fn FcFini();
+        fn FcGetVersion() -> c_int,
 
-    pub fn FcGetVersion() -> c_int;
+        fn FcInitReinitialize() -> FcBool,
 
-    pub fn FcInitReinitialize() -> FcBool;
+        fn FcInitBringUptoDate() -> FcBool,
 
-    pub fn FcInitBringUptoDate() -> FcBool;
+        fn FcGetLangs() -> *mut FcStrSet,
 
-    pub fn FcGetLangs() -> *mut FcStrSet;
+        fn FcLangGetCharSet(*const FcChar8) -> *mut FcCharSet,
 
-    pub fn FcLangGetCharSet(lang: *const FcChar8) -> *mut FcCharSet;
+        fn FcLangSetCreate() -> *mut FcLangSet,
 
-    pub fn FcLangSetCreate() -> *mut FcLangSet;
+        fn FcLangSetDestroy(*mut FcLangSet) -> (),
 
-    pub fn FcLangSetDestroy(ls: *mut FcLangSet);
+        fn FcLangSetCopy(*const FcLangSet) -> *mut FcLangSet,
 
-    pub fn FcLangSetCopy(ls: *const FcLangSet) -> *mut FcLangSet;
+        fn FcLangSetAdd(*mut FcLangSet, *const FcChar8) -> FcBool,
 
-    pub fn FcLangSetAdd(ls: *mut FcLangSet, lang: *const FcChar8) -> FcBool;
+        fn FcLangSetHasLang(*const FcLangSet, *const FcChar8) -> FcLangResult,
 
-    pub fn FcLangSetHasLang(ls: *const FcLangSet, lang: *const FcChar8) -> FcLangResult;
+        fn FcLangSetCompare(*const FcLangSet, *const FcLangSet) -> FcLangResult,
 
-    pub fn FcLangSetCompare(lsa: *const FcLangSet, lsb: *const FcLangSet) -> FcLangResult;
+        fn FcLangSetContains(*const FcLangSet, *const FcLangSet) -> FcBool,
 
-    pub fn FcLangSetContains(lsa: *const FcLangSet, lsb: *const FcLangSet) -> FcBool;
+        fn FcLangSetEqual(*const FcLangSet, *const FcLangSet) -> FcBool,
 
-    pub fn FcLangSetEqual(lsa: *const FcLangSet, lsb: *const FcLangSet) -> FcBool;
+        fn FcLangSetHash(*const FcLangSet) -> FcChar32,
 
-    pub fn FcLangSetHash(ls: *const FcLangSet) -> FcChar32;
+        fn FcLangSetGetLangs(*const FcLangSet) -> *mut FcStrSet,
 
-    pub fn FcLangSetGetLangs(ls: *const FcLangSet) -> *mut FcStrSet;
+        fn FcObjectSetCreate() -> *mut FcObjectSet,
 
-    pub fn FcObjectSetCreate() -> *mut FcObjectSet;
+        fn FcObjectSetAdd(*mut FcObjectSet, *const c_char) -> FcBool,
 
-    pub fn FcObjectSetAdd(os: *mut FcObjectSet, object: *const c_char) -> FcBool;
+        fn FcObjectSetDestroy(*mut FcObjectSet) -> (),
 
-    pub fn FcObjectSetDestroy(os: *mut FcObjectSet);
+        // fn FcObjectSetVaBuild(*mut c_char, *mut __va_list_tag) -> *mut FcObjectSet,
 
-    //pub fn FcObjectSetVaBuild(first: *mut c_char, va: *mut __va_list_tag) -> *mut FcObjectSet;
+        fn FcFontSetList(
+            *mut FcConfig,
+            *mut *mut FcFontSet,
+            c_int,
+            *mut FcPattern,
+            *mut FcObjectSet
+        ) -> *mut FcFontSet,
 
-    pub fn FcObjectSetBuild(first: *mut c_char, ...) -> *mut FcObjectSet;
+        fn FcFontList(
+            *mut FcConfig,
+            *mut FcPattern,
+            *mut FcObjectSet
+        ) -> *mut FcFontSet,
 
-    pub fn FcFontSetList(
-        config: *mut FcConfig,
-        sets: *mut *mut FcFontSet,
-        nsets: c_int,
-        p: *mut FcPattern,
-        os: *mut FcObjectSet,
-    ) -> *mut FcFontSet;
+        fn FcAtomicCreate(*const FcChar8) -> *mut FcAtomic,
 
-    pub fn FcFontList(
-        config: *mut FcConfig,
-        p: *mut FcPattern,
-        os: *mut FcObjectSet,
-    ) -> *mut FcFontSet;
+        fn FcAtomicLock(*mut FcAtomic) -> FcBool,
 
-    pub fn FcAtomicCreate(file: *const FcChar8) -> *mut FcAtomic;
+        fn FcAtomicNewFile(*mut FcAtomic) -> *mut FcChar8,
 
-    pub fn FcAtomicLock(atomic: *mut FcAtomic) -> FcBool;
+        fn FcAtomicOrigFile(*mut FcAtomic) -> *mut FcChar8,
 
-    pub fn FcAtomicNewFile(atomic: *mut FcAtomic) -> *mut FcChar8;
+        fn FcAtomicReplaceOrig(*mut FcAtomic) -> FcBool,
 
-    pub fn FcAtomicOrigFile(atomic: *mut FcAtomic) -> *mut FcChar8;
+        fn FcAtomicDeleteNew(*mut FcAtomic) -> (),
 
-    pub fn FcAtomicReplaceOrig(atomic: *mut FcAtomic) -> FcBool;
+        fn FcAtomicUnlock(*mut FcAtomic) -> (),
 
-    pub fn FcAtomicDeleteNew(atomic: *mut FcAtomic);
+        fn FcAtomicDestroy(*mut FcAtomic) -> (),
 
-    pub fn FcAtomicUnlock(atomic: *mut FcAtomic);
+        fn FcFontSetMatch(
+            *mut FcConfig,
+            *mut *mut FcFontSet,
+            c_int,
+            *mut FcPattern,
+            *mut FcResult
+        ) -> *mut FcPattern,
 
-    pub fn FcAtomicDestroy(atomic: *mut FcAtomic);
+        fn FcFontMatch(
+            *mut FcConfig,
+            *mut FcPattern,
+            *mut FcResult
+        ) -> *mut FcPattern,
 
-    pub fn FcFontSetMatch(
-        config: *mut FcConfig,
-        sets: *mut *mut FcFontSet,
-        nsets: c_int,
-        p: *mut FcPattern,
-        result: *mut FcResult,
-    ) -> *mut FcPattern;
+        fn FcFontRenderPrepare(
+            *mut FcConfig,
+            *mut FcPattern,
+            *mut FcPattern
+        ) -> *mut FcPattern,
 
-    pub fn FcFontMatch(
-        config: *mut FcConfig,
-        p: *mut FcPattern,
-        result: *mut FcResult,
-    ) -> *mut FcPattern;
+        fn FcFontSetSort(
+            *mut FcConfig,
+            *mut *mut FcFontSet,
+            c_int,
+            *mut FcPattern,
+            FcBool,
+            *mut *mut FcCharSet,
+            *mut FcResult
+        ) -> *mut FcFontSet,
 
-    pub fn FcFontRenderPrepare(
-        config: *mut FcConfig,
-        pat: *mut FcPattern,
-        font: *mut FcPattern,
-    ) -> *mut FcPattern;
+        fn FcFontSort(
+            *mut FcConfig,
+            *mut FcPattern,
+            FcBool,
+            *mut *mut FcCharSet,
+            *mut FcResult
+        ) -> *mut FcFontSet,
 
-    pub fn FcFontSetSort(
-        config: *mut FcConfig,
-        sets: *mut *mut FcFontSet,
-        nsets: c_int,
-        p: *mut FcPattern,
-        trim: FcBool,
-        csp: *mut *mut FcCharSet,
-        result: *mut FcResult,
-    ) -> *mut FcFontSet;
+        fn FcFontSetSortDestroy(*mut FcFontSet) -> (),
 
-    pub fn FcFontSort(
-        config: *mut FcConfig,
-        p: *mut FcPattern,
-        trim: FcBool,
-        csp: *mut *mut FcCharSet,
-        result: *mut FcResult,
-    ) -> *mut FcFontSet;
+        fn FcMatrixCopy(*const FcMatrix) -> *mut FcMatrix,
 
-    pub fn FcFontSetSortDestroy(fs: *mut FcFontSet);
+        fn FcMatrixEqual(*const FcMatrix, *const FcMatrix) -> FcBool,
 
-    pub fn FcMatrixCopy(mat: *const FcMatrix) -> *mut FcMatrix;
+        fn FcMatrixMultiply(*mut FcMatrix, *const FcMatrix, *const FcMatrix) -> (),
 
-    pub fn FcMatrixEqual(mat1: *const FcMatrix, mat2: *const FcMatrix) -> FcBool;
+        fn FcMatrixRotate(*mut FcMatrix, c_double, c_double) -> (),
 
-    pub fn FcMatrixMultiply(result: *mut FcMatrix, a: *const FcMatrix, b: *const FcMatrix);
+        fn FcMatrixScale(*mut FcMatrix, c_double, c_double) -> (),
 
-    pub fn FcMatrixRotate(m: *mut FcMatrix, c: c_double, s: c_double);
+        fn FcMatrixShear(*mut FcMatrix, c_double, c_double) -> (),
 
-    pub fn FcMatrixScale(m: *mut FcMatrix, sx: c_double, sy: c_double);
+        fn FcNameRegisterObjectTypes(*const FcObjectType, c_int) -> FcBool,
 
-    pub fn FcMatrixShear(m: *mut FcMatrix, sh: c_double, sv: c_double);
+        fn FcNameUnregisterObjectTypes(*const FcObjectType, c_int) -> FcBool,
 
-    pub fn FcNameRegisterObjectTypes(types: *const FcObjectType, ntype: c_int) -> FcBool;
+        fn FcNameGetObjectType(*const c_char) -> *const FcObjectType,
 
-    pub fn FcNameUnregisterObjectTypes(types: *const FcObjectType, ntype: c_int) -> FcBool;
+        fn FcNameRegisterConstants(*const FcConstant, c_int) -> FcBool,
 
-    pub fn FcNameGetObjectType(object: *const c_char) -> *const FcObjectType;
+        fn FcNameUnregisterConstants(*const FcConstant, c_int) -> FcBool,
 
-    pub fn FcNameRegisterConstants(consts: *const FcConstant, nconsts: c_int) -> FcBool;
+        fn FcNameGetConstant(*mut FcChar8) -> *const FcConstant,
 
-    pub fn FcNameUnregisterConstants(consts: *const FcConstant, nconsts: c_int) -> FcBool;
+        fn FcNameConstant(*mut FcChar8, *mut c_int) -> FcBool,
 
-    pub fn FcNameGetConstant(string: *mut FcChar8) -> *const FcConstant;
+        fn FcNameParse(*const FcChar8) -> *mut FcPattern,
 
-    pub fn FcNameConstant(string: *mut FcChar8, result: *mut c_int) -> FcBool;
+        fn FcNameUnparse(*mut FcPattern) -> *mut FcChar8,
 
-    pub fn FcNameParse(name: *const FcChar8) -> *mut FcPattern;
+        fn FcPatternCreate() -> *mut FcPattern,
 
-    pub fn FcNameUnparse(pat: *mut FcPattern) -> *mut FcChar8;
+        fn FcPatternDuplicate(*const FcPattern) -> *mut FcPattern,
 
-    pub fn FcPatternCreate() -> *mut FcPattern;
+        fn FcPatternReference(*mut FcPattern) -> (),
 
-    pub fn FcPatternDuplicate(p: *const FcPattern) -> *mut FcPattern;
+        fn FcPatternFilter(*mut FcPattern, *const FcObjectSet) -> *mut FcPattern,
 
-    pub fn FcPatternReference(p: *mut FcPattern);
+        fn FcValueDestroy(FcValue) -> (),
 
-    pub fn FcPatternFilter(p: *mut FcPattern, os: *const FcObjectSet) -> *mut FcPattern;
+        fn FcValueEqual(FcValue, FcValue) -> FcBool,
 
-    pub fn FcValueDestroy(v: FcValue);
+        fn FcValueSave(FcValue) -> FcValue,
 
-    pub fn FcValueEqual(va: FcValue, vb: FcValue) -> FcBool;
+        fn FcPatternDestroy(*mut FcPattern) -> (),
 
-    pub fn FcValueSave(v: FcValue) -> FcValue;
+        fn FcPatternEqual(*const FcPattern, *const FcPattern) -> FcBool,
 
-    pub fn FcPatternDestroy(p: *mut FcPattern);
+        fn FcPatternEqualSubset(
+            *const FcPattern,
+            *const FcPattern,
+            *const FcObjectSet
+        ) -> FcBool,
 
-    pub fn FcPatternEqual(pa: *const FcPattern, pb: *const FcPattern) -> FcBool;
+        fn FcPatternHash(*const FcPattern) -> FcChar32,
 
-    pub fn FcPatternEqualSubset(
-        pa: *const FcPattern,
-        pb: *const FcPattern,
-        os: *const FcObjectSet,
-    ) -> FcBool;
+        fn FcPatternAdd(
+            *mut FcPattern,
+            *const c_char,
+            FcValue,
+            FcBool
+        ) -> FcBool,
 
-    pub fn FcPatternHash(p: *const FcPattern) -> FcChar32;
+        fn FcPatternAddWeak(
+            *mut FcPattern,
+            *const c_char,
+            FcValue,
+            FcBool
+        ) -> FcBool,
 
-    pub fn FcPatternAdd(
-        p: *mut FcPattern,
-        object: *const c_char,
-        value: FcValue,
-        append: FcBool,
-    ) -> FcBool;
+        fn FcPatternGet(
+            *mut FcPattern,
+            *const c_char,
+            c_int,
+            *mut FcValue
+        ) -> FcResult,
 
-    pub fn FcPatternAddWeak(
-        p: *mut FcPattern,
-        object: *const c_char,
-        value: FcValue,
-        append: FcBool,
-    ) -> FcBool;
+        fn FcPatternDel(*mut FcPattern, *const c_char) -> FcBool,
 
-    pub fn FcPatternGet(
-        p: *mut FcPattern,
-        object: *const c_char,
-        id: c_int,
-        v: *mut FcValue,
-    ) -> FcResult;
+        fn FcPatternRemove(*mut FcPattern, *const c_char, c_int) -> FcBool,
 
-    pub fn FcPatternDel(p: *mut FcPattern, object: *const c_char) -> FcBool;
+        fn FcPatternAddInteger(*mut FcPattern, *const c_char, c_int) -> FcBool,
 
-    pub fn FcPatternRemove(p: *mut FcPattern, object: *const c_char, id: c_int) -> FcBool;
+        fn FcPatternAddDouble(*mut FcPattern, *const c_char, c_double) -> FcBool,
 
-    pub fn FcPatternAddInteger(p: *mut FcPattern, object: *const c_char, i: c_int) -> FcBool;
+        fn FcPatternAddString(
+            *mut FcPattern,
+            *const c_char,
+            *const FcChar8
+        ) -> FcBool,
 
-    pub fn FcPatternAddDouble(p: *mut FcPattern, object: *const c_char, d: c_double) -> FcBool;
+        fn FcPatternAddMatrix(
+            *mut FcPattern,
+            *const c_char,
+            *const FcMatrix
+        ) -> FcBool,
 
-    pub fn FcPatternAddString(
-        p: *mut FcPattern,
-        object: *const c_char,
-        s: *const FcChar8,
-    ) -> FcBool;
+        fn FcPatternAddCharSet(
+            *mut FcPattern,
+            *const c_char,
+            *const FcCharSet
+        ) -> FcBool,
 
-    pub fn FcPatternAddMatrix(
-        p: *mut FcPattern,
-        object: *const c_char,
-        s: *const FcMatrix,
-    ) -> FcBool;
+        fn FcPatternAddBool(*mut FcPattern, *const c_char, FcBool) -> FcBool,
 
-    pub fn FcPatternAddCharSet(
-        p: *mut FcPattern,
-        object: *const c_char,
-        c: *const FcCharSet,
-    ) -> FcBool;
+        fn FcPatternAddLangSet(
+            *mut FcPattern,
+            *const c_char,
+            *const FcLangSet
+        ) -> FcBool,
 
-    pub fn FcPatternAddBool(p: *mut FcPattern, object: *const c_char, b: FcBool) -> FcBool;
+        fn FcPatternGetInteger(
+            *mut FcPattern,
+            *const c_char,
+            c_int,
+            *mut c_int
+        ) -> FcResult,
 
-    pub fn FcPatternAddLangSet(
-        p: *mut FcPattern,
-        object: *const c_char,
-        ls: *const FcLangSet,
-    ) -> FcBool;
+        fn FcPatternGetDouble(
+            *mut FcPattern,
+            *const c_char,
+            c_int,
+            *mut c_double
+        ) -> FcResult,
 
-    pub fn FcPatternGetInteger(
-        p: *mut FcPattern,
-        object: *const c_char,
-        n: c_int,
-        i: *mut c_int,
-    ) -> FcResult;
+        fn FcPatternGetString(
+            *mut FcPattern,
+            *const c_char,
+            c_int,
+            *mut *mut FcChar8
+        ) -> FcResult,
 
-    pub fn FcPatternGetDouble(
-        p: *mut FcPattern,
-        object: *const c_char,
-        n: c_int,
-        d: *mut c_double,
-    ) -> FcResult;
+        fn FcPatternGetMatrix(
+            *mut FcPattern,
+            *const c_char,
+            c_int,
+            *mut *mut FcMatrix
+        ) -> FcResult,
 
-    pub fn FcPatternGetString(
-        p: *mut FcPattern,
-        object: *const c_char,
-        n: c_int,
-        s: *mut *mut FcChar8,
-    ) -> FcResult;
+        fn FcPatternGetCharSet(
+            *mut FcPattern,
+            *const c_char,
+            c_int,
+            *mut *mut FcCharSet
+        ) -> FcResult,
 
-    pub fn FcPatternGetMatrix(
-        p: *mut FcPattern,
-        object: *const c_char,
-        n: c_int,
-        s: *mut *mut FcMatrix,
-    ) -> FcResult;
+        fn FcPatternGetBool(
+            *mut FcPattern,
+            *const c_char,
+            c_int,
+            *mut FcBool
+        ) -> FcResult,
 
-    pub fn FcPatternGetCharSet(
-        p: *mut FcPattern,
-        object: *const c_char,
-        n: c_int,
-        c: *mut *mut FcCharSet,
-    ) -> FcResult;
+        fn FcPatternGetLangSet(
+            *mut FcPattern,
+            *const c_char,
+            c_int,
+            *mut *mut FcLangSet
+        ) -> FcResult,
 
-    pub fn FcPatternGetBool(
-        p: *mut FcPattern,
-        object: *const c_char,
-        n: c_int,
-        b: *mut FcBool,
-    ) -> FcResult;
+        // fn FcPatternVaBuild(*mut FcPattern, *mut __va_list_tag) -> *mut FcPattern,
 
-    pub fn FcPatternGetLangSet(
-        p: *mut FcPattern,
-        object: *const c_char,
-        n: c_int,
-        ls: *mut *mut FcLangSet,
-    ) -> FcResult;
+        fn FcPatternFormat(*mut FcPattern, *const FcChar8) -> *mut FcChar8,
 
-    //pub fn FcPatternVaBuild(p: *mut FcPattern, va: *mut __va_list_tag) -> *mut FcPattern;
+        fn FcStrCopy(*const FcChar8) -> *mut FcChar8,
 
-    pub fn FcPatternBuild(p: *mut FcPattern, ...) -> *mut FcPattern;
+        fn FcStrCopyFilename(*const FcChar8) -> *mut FcChar8,
 
-    pub fn FcPatternFormat(pat: *mut FcPattern, format: *const FcChar8) -> *mut FcChar8;
+        fn FcStrPlus(*const FcChar8, *const FcChar8) -> *mut FcChar8,
 
-    pub fn FcStrCopy(s: *const FcChar8) -> *mut FcChar8;
+        fn FcStrFree(*mut FcChar8) -> (),
 
-    pub fn FcStrCopyFilename(s: *const FcChar8) -> *mut FcChar8;
+        fn FcStrDowncase(*const FcChar8) -> *mut FcChar8,
 
-    pub fn FcStrPlus(s1: *const FcChar8, s2: *const FcChar8) -> *mut FcChar8;
+        fn FcStrCmpIgnoreCase(*const FcChar8, *const FcChar8) -> c_int,
 
-    pub fn FcStrFree(s: *mut FcChar8);
+        fn FcStrCmp(*const FcChar8, *const FcChar8) -> c_int,
 
-    pub fn FcStrDowncase(s: *const FcChar8) -> *mut FcChar8;
+        fn FcStrStrIgnoreCase(*const FcChar8, *const FcChar8) -> *mut FcChar8,
 
-    pub fn FcStrCmpIgnoreCase(s1: *const FcChar8, s2: *const FcChar8) -> c_int;
+        fn FcStrStr(*const FcChar8, *const FcChar8) -> *mut FcChar8,
 
-    pub fn FcStrCmp(s1: *const FcChar8, s2: *const FcChar8) -> c_int;
+        fn FcUtf8ToUcs4(*mut FcChar8, *mut FcChar32, c_int) -> c_int,
 
-    pub fn FcStrStrIgnoreCase(s1: *const FcChar8, s2: *const FcChar8) -> *mut FcChar8;
+        fn FcUtf8Len(
+            *mut FcChar8,
+            c_int,
+            *mut c_int,
+            *mut c_int
+        ) -> FcBool,
 
-    pub fn FcStrStr(s1: *const FcChar8, s2: *const FcChar8) -> *mut FcChar8;
+        fn FcUcs4ToUtf8(FcChar32, *mut FcChar8) -> c_int,
 
-    pub fn FcUtf8ToUcs4(src_orig: *mut FcChar8, dst: *mut FcChar32, len: c_int) -> c_int;
+        fn FcUtf16ToUcs4(
+            *mut FcChar8,
+            FcEndian,
+            *mut FcChar32,
+            c_int
+        ) -> c_int,
 
-    pub fn FcUtf8Len(
-        string: *mut FcChar8,
-        len: c_int,
-        nchar: *mut c_int,
-        wchar: *mut c_int,
-    ) -> FcBool;
+        fn FcUtf16Len(
+            *mut FcChar8,
+            FcEndian,
+            c_int,
+            *mut c_int,
+            *mut c_int
+        ) -> FcBool,
 
-    pub fn FcUcs4ToUtf8(ucs4: FcChar32, dest: *mut FcChar8) -> c_int;
+        fn FcStrDirname(*const FcChar8) -> *mut FcChar8,
 
-    pub fn FcUtf16ToUcs4(
-        src_orig: *mut FcChar8,
-        endian: FcEndian,
-        dst: *mut FcChar32,
-        len: c_int,
-    ) -> c_int;
+        fn FcStrBasename(*const FcChar8) -> *mut FcChar8,
 
-    pub fn FcUtf16Len(
-        string: *mut FcChar8,
-        endian: FcEndian,
-        len: c_int,
-        nchar: *mut c_int,
-        wchar: *mut c_int,
-    ) -> FcBool;
+        fn FcStrSetCreate() -> *mut FcStrSet,
 
-    pub fn FcStrDirname(file: *const FcChar8) -> *mut FcChar8;
+        fn FcStrSetMember(*mut FcStrSet, *const FcChar8) -> FcBool,
 
-    pub fn FcStrBasename(file: *const FcChar8) -> *mut FcChar8;
+        fn FcStrSetEqual(*mut FcStrSet, *mut FcStrSet) -> FcBool,
 
-    pub fn FcStrSetCreate() -> *mut FcStrSet;
+        fn FcStrSetAdd(*mut FcStrSet, *const FcChar8) -> FcBool,
 
-    pub fn FcStrSetMember(set: *mut FcStrSet, s: *const FcChar8) -> FcBool;
+        fn FcStrSetAddFilename(*mut FcStrSet, *const FcChar8) -> FcBool,
 
-    pub fn FcStrSetEqual(sa: *mut FcStrSet, sb: *mut FcStrSet) -> FcBool;
+        fn FcStrSetDel(*mut FcStrSet, *const FcChar8) -> FcBool,
 
-    pub fn FcStrSetAdd(set: *mut FcStrSet, s: *const FcChar8) -> FcBool;
+        fn FcStrSetDestroy(*mut FcStrSet) -> (),
 
-    pub fn FcStrSetAddFilename(set: *mut FcStrSet, s: *const FcChar8) -> FcBool;
+        fn FcStrListCreate(*mut FcStrSet) -> *mut FcStrList,
 
-    pub fn FcStrSetDel(set: *mut FcStrSet, s: *const FcChar8) -> FcBool;
+        fn FcStrListNext(*mut FcStrList) -> *mut FcChar8,
 
-    pub fn FcStrSetDestroy(set: *mut FcStrSet);
+        fn FcStrListDone(*mut FcStrList) -> (),
 
-    pub fn FcStrListCreate(set: *mut FcStrSet) -> *mut FcStrList;
+        fn FcConfigParseAndLoad(
+            *mut FcConfig,
+            *const FcChar8,
+            FcBool
+        ) -> FcBool,
 
-    pub fn FcStrListNext(list: *mut FcStrList) -> *mut FcChar8;
-
-    pub fn FcStrListDone(list: *mut FcStrList);
-
-    pub fn FcConfigParseAndLoad(
-        config: *mut FcConfig,
-        file: *const FcChar8,
-        complain: FcBool,
-    ) -> FcBool;
-
-}
+    varargs:
+        fn FcPatternBuild(*mut FcPattern) -> *mut FcPattern,
+        fn FcObjectSetBuild(*mut c_char) -> *mut FcObjectSet,
+);

@@ -7,11 +7,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type = "lib"]
-#![crate_type = "dylib"]
-#![crate_type = "rlib"]
-
 #[macro_use]
 extern crate const_cstr;
 
 pub mod fontconfig;
+
+#[cfg(feature = "dlopen")]
+pub use fontconfig::{LIB, LIB_RESULT};
+
+pub use dlib::ffi_dispatch;

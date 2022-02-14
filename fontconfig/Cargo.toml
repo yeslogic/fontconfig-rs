@@ -1,6 +1,8 @@
 [package]
 name = "fontconfig"
-version = "0.2.1"
+version = "0.3.0"
+edition = "2018"
+rust-version = "1.46"
 authors = [
     "Austin Bonander <austin.bonander@gmail.com>",
     "Manuel Reinhardt <manuel.jr16@gmail.com>",
@@ -21,5 +23,7 @@ repository = "https://github.com/yeslogic/fontconfig-rs"
 travis-ci = { repository = "yeslogic/fontconfig-rs" }
 
 [dependencies.yeslogic-fontconfig-sys]
-version = "2.11.2"
 path = "../fontconfig-sys"
+
+[features]
+dlopen = [ "yeslogic-fontconfig-sys/dlopen" ]

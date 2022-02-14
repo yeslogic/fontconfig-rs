@@ -1,6 +1,8 @@
 [package]
 name = "yeslogic-fontconfig-sys"
-version = "2.11.2"
+version = "3.0.0"
+edition = "2018"
+rust-version = "1.46"
 authors = [
     "Austin Bonander <austin.bonander@gmail.com>",
     "The Servo Project Developers",
@@ -16,7 +18,6 @@ homepage = "https://github.com/yeslogic/fontconfig-rs"
 documentation = "https://docs.rs/crate/yeslogic-fontconfig-sys"
 repository = "https://github.com/yeslogic/fontconfig-rs"
 
-build = "build.rs"
 links = "fontconfig"
 
 [badges]
@@ -27,6 +28,13 @@ name = "fontconfig_sys"
 
 [dependencies]
 const-cstr = "0.3"
+dlib = "0.5.0"
+# This cannot be optional because build.rs can't conditionally enable it
+# when the RUST_FONTCONFIG_DLOPEN environment variable is set.
+lazy_static = "1.4.0"
+
+[features]
+dlopen = []
 
 [build-dependencies]
 pkg-config = "0.3"

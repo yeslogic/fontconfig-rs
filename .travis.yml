@@ -13,7 +13,7 @@ rust:
   - nightly
   - beta
   - stable
-  - 1.38.0
+  - 1.46.0
 
 jobs:
   allow_failures:
@@ -24,3 +24,4 @@ before_install:
 
 script:
   - cargo test
+  - RUST_FONTCONFIG_DLOPEN=on cargo test

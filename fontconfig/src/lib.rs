@@ -1,6 +1,9 @@
 #![deny(missing_docs)]
 
-//! A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating fonts on a UNIX like systems such as Linux and FreeBSD. Requires Fontconfig to be installed.
+//! A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating fonts on a UNIX
+//! like systems such as Linux and FreeBSD. Requires Fontconfig to be installed. Alternatively,
+//! set the environment variable `RUST_FONTCONFIG_DLOPEN=on` or enable the `dlopen` Cargo feature
+//! to load the library at runtime rather than link at build time (useful for cross compiling).
 //!
 //! See the [Fontconfig developer reference][1] for more information.
 //!
@@ -34,6 +37,12 @@
 extern crate fontconfig_sys;
 
 use crate::fontconfig_sys::fontconfig as sys;
+use crate::fontconfig_sys::ffi_dispatch;
+
+#[cfg(feature = "dlopen")]
+use sys::{LIB, LIB_RESULT};
+#[cfg(not(feature = "dlopen"))]
+use sys::*;
 
 use std::ffi::{CStr, CString};
 use std::mem;
@@ -81,7 +90,11 @@ impl Fontconfig {
     ///
     /// If Fontconfig fails to initialise, returns `None`.
     pub fn new() -> Option<Self> {
-        if unsafe { sys::FcInit() == FcTrue } {
+        #[cfg(feature = "dlopen")]
+        if LIB_RESULT.is_err() {
+            return None;
+        }
+        if unsafe { ffi_dispatch!(LIB, FcInit,) == FcTrue } {
             Some(Fontconfig { _initialised: () })
         } else {
             None
@@ -150,7 +163,7 @@ pub struct Pattern<'fc> {
 impl<'fc> Pattern<'fc> {
     /// Create a new `Pattern`.
     pub fn new(fc: &Fontconfig) -> Pattern {
-        let pat = unsafe { sys::FcPatternCreate() };
+        let pat = unsafe { ffi_dispatch!(LIB, FcPatternCreate,) };
         assert!(!pat.is_null());
 
         Pattern { pat, fc }
@@ -159,7 +172,7 @@ impl<'fc> Pattern<'fc> {
     /// Create a `Pattern` from a raw fontconfig FcPattern pointer. The pattern is referenced.
     pub fn from_pattern(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern {
         unsafe {
-            sys::FcPatternReference(pat);
+            ffi_dispatch!(LIB, FcPatternReference, pat);
         }
 
         Pattern { pat, fc }
@@ -172,7 +185,7 @@ impl<'fc> Pattern<'fc> {
     /// [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html
     pub fn add_string(&mut self, name: &CStr, val: &CStr) {
         unsafe {
-            sys::FcPatternAddString(self.pat, name.as_ptr(), val.as_ptr() as *const u8);
+            ffi_dispatch!(LIB, FcPatternAddString, self.pat, name.as_ptr(), val.as_ptr() as *const u8);
         }
     }
 
@@ -180,7 +193,7 @@ impl<'fc> Pattern<'fc> {
     pub fn get_string<'a>(&'a self, name: &'a CStr) -> Option<&'a str> {
         unsafe {
             let mut ret: *mut sys::FcChar8 = ptr::null_mut();
-            if sys::FcPatternGetString(self.pat, name.as_ptr(), 0, &mut ret as *mut _)
+            if ffi_dispatch!(LIB, FcPatternGetString, self.pat, name.as_ptr(), 0, &mut ret as *mut _)
                 == sys::FcResultMatch
             {
                 let cstr = CStr::from_ptr(ret as *const c_char);
@@ -195,7 +208,7 @@ impl<'fc> Pattern<'fc> {
     pub fn get_int(&self, name: &CStr) -> Option<i32> {
         unsafe {
             let mut ret: i32 = 0;
-            if sys::FcPatternGetInteger(self.pat, name.as_ptr(), 0, &mut ret as *mut i32)
+            if ffi_dispatch!(LIB, FcPatternGetInteger, self.pat, name.as_ptr(), 0, &mut ret as *mut i32)
                 == sys::FcResultMatch
             {
                 Some(ret)
@@ -208,19 +221,19 @@ impl<'fc> Pattern<'fc> {
     /// Print this pattern to stdout with all its values.
     pub fn print(&self) {
         unsafe {
-            sys::FcPatternPrint(&*self.pat);
+            ffi_dispatch!(LIB, FcPatternPrint, &*self.pat);
         }
     }
 
     fn default_substitute(&mut self) {
         unsafe {
-            sys::FcDefaultSubstitute(self.pat);
+            ffi_dispatch!(LIB, FcDefaultSubstitute, self.pat);
         }
     }
 
     fn config_substitute(&mut self) {
         unsafe {
-            sys::FcConfigSubstitute(ptr::null_mut(), self.pat, sys::FcMatchPattern);
+            ffi_dispatch!(LIB, FcConfigSubstitute, ptr::null_mut(), self.pat, sys::FcMatchPattern);
         }
     }
 
@@ -233,7 +246,7 @@ impl<'fc> Pattern<'fc> {
             let mut res = sys::FcResultNoMatch;
             Pattern::from_pattern(
                 self.fc,
-                sys::FcFontMatch(ptr::null_mut(), self.pat, &mut res),
+                ffi_dispatch!(LIB, FcFontMatch, ptr::null_mut(), self.pat, &mut res),
             )
         }
     }
@@ -278,17 +291,17 @@ impl<'fc> Pattern<'fc> {
 
 impl<'fc> std::fmt::Debug for Pattern<'fc> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let fcstr = unsafe { sys::FcNameUnparse(self.pat) };
+        let fcstr = unsafe { ffi_dispatch!(LIB, FcNameUnparse, self.pat) };
         let fcstr = unsafe { CStr::from_ptr(fcstr as *const c_char) };
         let result = write!(f, "{:?}", fcstr);
-        unsafe { sys::FcStrFree(fcstr.as_ptr() as *mut u8) };
+        unsafe { ffi_dispatch!(LIB, FcStrFree, fcstr.as_ptr() as *mut u8) };
         result
     }
 }
 
 impl<'fc> Clone for Pattern<'fc> {
     fn clone(&self) -> Self {
-        let clone = unsafe { sys::FcPatternDuplicate(self.pat) };
+        let clone = unsafe { ffi_dispatch!(LIB, FcPatternDuplicate, self.pat) };
         Pattern {
             pat: clone,
             fc: self.fc,
@@ -299,7 +312,7 @@ impl<'fc> Clone for Pattern<'fc> {
 impl<'fc> Drop for Pattern<'fc> {
     fn drop(&mut self) {
         unsafe {
-            sys::FcPatternDestroy(self.pat);
+            ffi_dispatch!(LIB, FcPatternDestroy, self.pat);
         }
     }
 }
@@ -313,7 +326,7 @@ pub struct FontSet<'fc> {
 impl<'fc> FontSet<'fc> {
     /// Create a new, empty `FontSet`.
     pub fn new(fc: &Fontconfig) -> FontSet {
-        let fcset = unsafe { sys::FcFontSetCreate() };
+        let fcset = unsafe { ffi_dispatch!(LIB, FcFontSetCreate,) };
         FontSet { fcset, fc }
     }
 
@@ -327,14 +340,14 @@ impl<'fc> FontSet<'fc> {
     /// Add a `Pattern` to this `FontSet`.
     pub fn add_pattern(&mut self, pat: Pattern) {
         unsafe {
-            sys::FcFontSetAdd(self.fcset, pat.pat);
+            ffi_dispatch!(LIB, FcFontSetAdd, self.fcset, pat.pat);
             mem::forget(pat);
         }
     }
 
     /// Print this `FontSet` to stdout.
     pub fn print(&self) {
-        unsafe { sys::FcFontSetPrint(self.fcset) };
+        unsafe { ffi_dispatch!(LIB, FcFontSetPrint, self.fcset) };
     }
 
     /// Iterate the fonts (as `Patterns`) in this `FontSet`.
@@ -351,14 +364,14 @@ impl<'fc> FontSet<'fc> {
 
 impl<'fc> Drop for FontSet<'fc> {
     fn drop(&mut self) {
-        unsafe { sys::FcFontSetDestroy(self.fcset) }
+        unsafe { ffi_dispatch!(LIB, FcFontSetDestroy, self.fcset) }
     }
 }
 
 /// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
 pub fn list_fonts<'fc>(pattern: &Pattern<'fc>, objects: Option<&ObjectSet>) -> FontSet<'fc> {
     let os = objects.map(|o| o.fcset).unwrap_or(ptr::null_mut());
-    let ptr = unsafe { sys::FcFontList(ptr::null_mut(), pattern.pat, os) };
+    let ptr = unsafe { ffi_dispatch!(LIB, FcFontList, ptr::null_mut(), pattern.pat, os) };
     FontSet::from_raw(pattern.fc, ptr)
 }
 
@@ -370,7 +383,7 @@ pub struct ObjectSet {
 impl ObjectSet {
     /// Create a new, empty `ObjectSet`.
     pub fn new(_: &Fontconfig) -> ObjectSet {
-        let fcset = unsafe { sys::FcObjectSetCreate() };
+        let fcset = unsafe { ffi_dispatch!(LIB, FcObjectSetCreate,) };
         assert!(!fcset.is_null());
 
         ObjectSet { fcset }
@@ -386,14 +399,14 @@ impl ObjectSet {
 
     /// Add a string to the `ObjectSet`.
     pub fn add(&mut self, name: &CStr) {
-        let res = unsafe { sys::FcObjectSetAdd(self.fcset, name.as_ptr()) };
+        let res = unsafe { ffi_dispatch!(LIB, FcObjectSetAdd, self.fcset, name.as_ptr()) };
         assert_eq!(res, FcTrue);
     }
 }
 
 impl Drop for ObjectSet {
     fn drop(&mut self) {
-        unsafe { sys::FcObjectSetDestroy(self.fcset) }
+        unsafe { ffi_dispatch!(LIB, FcObjectSetDestroy, self.fcset) }
     }
 }
 

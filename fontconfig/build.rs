@@ -3,7 +3,4 @@ fn main() {
     if dlopen {
         println!("cargo:rustc-cfg=feature=\"dlopen\"");
     }
-    if !(dlopen || cfg!(feature = "dlopen")) {
-        pkg_config::find_library("fontconfig").unwrap();
-    }
 }

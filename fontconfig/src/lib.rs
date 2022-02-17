@@ -34,10 +34,8 @@
 //! }
 //! ```
 
-extern crate fontconfig_sys;
-
-use crate::fontconfig_sys::fontconfig as sys;
-use crate::fontconfig_sys::ffi_dispatch;
+use fontconfig_sys as sys;
+use fontconfig_sys::ffi_dispatch;
 
 #[cfg(feature = "dlopen")]
 use sys::{LIB, LIB_RESULT};

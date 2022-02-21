@@ -20,18 +20,20 @@ repository = "https://github.com/yeslogic/fontconfig-rs"
 
 links = "fontconfig"
 
-[badges]
-travis-ci = { repository = "yeslogic/fontconfig-rs" }
-
 [lib]
 name = "fontconfig_sys"
 
 [dependencies]
 const-cstr = "0.3"
 dlib = "0.5.0"
-# This cannot be optional because build.rs can't conditionally enable it
-# when the RUST_FONTCONFIG_DLOPEN environment variable is set.
-lazy_static = "1.4.0"
+# This can't be optional because build.rs can't conditionally enable an
+# optional dependency:
+#
+# > Note that this does not affect Cargo's dependency resolution. This cannot
+# > be used to enable an optional dependency, or enable other Cargo features.
+#
+# - https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-cfg
+once_cell = "1.9.0"
 
 [features]
 dlopen = []

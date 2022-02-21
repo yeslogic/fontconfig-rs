@@ -14,26 +14,28 @@
 #[macro_use]
 extern crate const_cstr;
 
+use std::os::raw::{c_char, c_double, c_int, c_uchar, c_uint, c_ushort, c_void};
+
 pub use dlib::ffi_dispatch;
 
 #[cfg(feature = "dlopen")]
-static SONAME: &str = if cfg!(windows) {
-    "libfontconfig.dll"
-} else if cfg!(target_vendor = "apple") {
-    "libfontconfig.dylib.1"
-} else {
-    "libfontconfig.so.1"
-};
+pub mod statics {
+    use super::Fc;
+    use once_cell::sync::Lazy;
 
-#[cfg(feature = "dlopen")]
-lazy_static::lazy_static! {
-    pub static ref LIB: &'static Fc = LIB_RESULT.as_ref().unwrap();
+    static SONAME: &str = if cfg!(windows) {
+        "libfontconfig.dll"
+    } else if cfg!(target_vendor = "apple") {
+        "libfontconfig.dylib.1"
+    } else {
+        "libfontconfig.so.1"
+    };
 
-    pub static ref LIB_RESULT: Result<Fc, dlib::DlError> =
-        unsafe { Fc::open(SONAME) };
+    pub static LIB_RESULT: Lazy<Result<Fc, dlib::DlError>> =
+        Lazy::new(|| unsafe { Fc::open(SONAME) });
+
+    pub static LIB: Lazy<&'static Fc> = Lazy::new(|| LIB_RESULT.as_ref().unwrap());
 }
-
-use std::os::raw::{c_char, c_double, c_int, c_uchar, c_uint, c_ushort, c_void};
 
 pub type FcChar8 = c_uchar;
 pub type FcChar16 = c_ushort;

@@ -19,9 +19,6 @@ homepage = "https://github.com/yeslogic/fontconfig-rs"
 documentation = "https://docs.rs/crate/fontconfig"
 repository = "https://github.com/yeslogic/fontconfig-rs"
 
-[badges]
-travis-ci = { repository = "yeslogic/fontconfig-rs" }
-
 [dependencies.yeslogic-fontconfig-sys]
 path = "../fontconfig-sys"
 

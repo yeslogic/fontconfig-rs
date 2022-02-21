@@ -38,7 +38,7 @@ use fontconfig_sys as sys;
 use fontconfig_sys::ffi_dispatch;
 
 #[cfg(feature = "dlopen")]
-use sys::{LIB, LIB_RESULT};
+use sys::statics::{LIB, LIB_RESULT};
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 

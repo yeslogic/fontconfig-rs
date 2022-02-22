@@ -20,6 +20,7 @@ documentation = "https://docs.rs/crate/fontconfig"
 repository = "https://github.com/yeslogic/fontconfig-rs"
 
 [dependencies.yeslogic-fontconfig-sys]
+version = "3.0.0"
 path = "../fontconfig-sys"
 
 [features]

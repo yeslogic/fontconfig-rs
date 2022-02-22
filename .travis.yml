@@ -14,10 +14,15 @@ rust:
   - 1.46.0
 
 before_install:
-  - sudo apt-get -y install libfontconfig1-dev
+  - sudo apt-get -y install libfontconfig1-dev jq
 
 script:
   - cargo test
-  # Rust 1.46.0 cargo doesn't accept carget tests --features
+  - ./ci/ldd-grep
+
+  # Rust 1.46.0 cargo doesn't accept carget test --features
   - cargo test --features dlopen --manifest-path fontconfig/Cargo.toml
+  - ./ci/ldd-grep -v -- --features dlopen --manifest-path fontconfig/Cargo.toml
+
   - RUST_FONTCONFIG_DLOPEN=on cargo test
+  - RUST_FONTCONFIG_DLOPEN=on ./ci/ldd-grep -v

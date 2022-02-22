@@ -8,6 +8,7 @@
 //! See the [Fontconfig developer reference][1] for more information.
 //!
 //! [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/t1.html
+//! [homepage]: https://www.freedesktop.org/wiki/Software/fontconfig/
 //!
 //! Dependencies
 //! ============
@@ -18,12 +19,10 @@
 //! * Void Linux: `fontconfig-devel`
 //!
 //! Usage
-//! =====
-//!
-//! `main.rs`:
+//! -----
 //!
 //! ```
-//! use fontconfig::{Font, Fontconfig};
+//! use fontconfig::Fontconfig;
 //!
 //! fn main() {
 //!     let fc = Fontconfig::new().unwrap();
@@ -33,6 +32,18 @@
 //!     println!("Name: {}\nPath: {}", font.name, font.path.display());
 //! }
 //! ```
+//!
+//! ### Cargo Features
+//!
+//! | Feature       | Description                       | Default Enabled | Extra Dependencies    |
+//! |---------------|-----------------------------------|:---------------:|-----------------------|
+//! | `dlopen`      | [dlopen] libfontconfig at runtime |        ❌       |                       |
+//!
+//! The `dlopen` feature enables building this crate without dynamically linking to the Fontconfig C
+//! library at link time. Instead, Fontconfig will be dynamically loaded at runtime with the
+//! [dlopen] function. This can be useful in cross-compiling situations as you don't need to have a
+//! version of Fontcofig available for the target platform available at compile time.
+
 
 use fontconfig_sys as sys;
 use fontconfig_sys::ffi_dispatch;

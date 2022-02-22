@@ -46,6 +46,14 @@ fn main() {
 
 You could then, for example, use `font.path` to create a `GlyphCache` from [`opengl_graphics`][gl] and pass it to [`conrod`][conrod].
 
+### Cargo Features
+
+| Feature       | Description                       | Default Enabled | Extra Dependencies    |
+|---------------|-----------------------------------|:---------------:|-----------------------|
+| `dlopen`      | [dlopen] libfontconfig at runtime |        ❌       |                       |
+
+The `dlopen` feature enables building this crate without dynamically linking to the Fontconfig C library at link time. Instead, Fontconfig will be dynamically loaded at runtime with the [dlopen] function. This can be useful in cross-compiling situations as you don't need to have a version of Fontcofig available for the target platform available at compile time.
+
 Other Fontconfig Crates
 -----------------------
 
@@ -80,3 +88,5 @@ name](https://github.com/abonander/fontconfig-rs/issues/9).
 [yeslogic-fontconfig]: https://crates.io/crates/yeslogic-fontconfig
 [yeslogic-fontconfig-sys]: https://crates.io/crates/yeslogic-fontconfig-sys
 [abonander]: https://github.com/abonander
+[dlopen]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/dlopen.html
+[dlib]: https://crates.io/crates/dlib

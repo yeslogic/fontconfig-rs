@@ -1,0 +1,38 @@
+#!/bin/sh
+
+set -eu
+
+INVERT_MATCH=""
+while getopts "v" opt; do
+    case "$opt" in
+        v) INVERT_MATCH=1;;
+        *) ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+
+EXE=$(cargo test --no-run --message-format=json "$@" | \
+  jq --raw-output 'select(.reason == "compiler-artifact" and .target.name == "fontconfig" and .target.test and .executable != null) | .executable')
+
+
+FOUND=""
+if ldd "$EXE" | grep --quiet libfontconfig ; then
+  FOUND=1
+fi
+
+if [ -z $INVERT_MATCH ]; then
+  if [ -z $FOUND ]; then
+    echo "fail - libfontconfig not found when expected"
+    exit 1
+  else
+    echo "ok - libfontconfig found"
+  fi
+else
+  if [ -z $FOUND ]; then
+    echo "ok - libfontconfig not found"
+  else
+    echo "fail - libfontconfig found when not expected"
+    exit 1
+  fi
+fi

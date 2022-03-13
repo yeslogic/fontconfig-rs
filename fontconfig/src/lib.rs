@@ -234,8 +234,8 @@ impl<'fc> Pattern<'fc> {
             if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, b"lang\0".as_ptr() as *const i8, 0, &mut ret as *mut _)
                 == sys::FcResultMatch
             {
-                let ss: *mut FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
-                let lang_strs: *mut FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
+                let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
+                let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
                 let mut res = vec![];
                 loop {
                     let lang_str: *mut sys::FcChar8 = ffi_dispatch!(LIB, FcStrListNext, lang_strs);

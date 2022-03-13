@@ -231,7 +231,7 @@ impl<'fc> Pattern<'fc> {
     pub fn get_lang_set<'a>(&'a self) -> Option<Vec<&'a str>> {
         unsafe {
             let mut ret: *mut sys::FcLangSet = ptr::null_mut();
-            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, b"lang\0".as_ptr() as *const i8, 0, &mut ret as *mut _)
+            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, FC_LANG.as_ptr(), 0, &mut ret as *mut _)
                 == sys::FcResultMatch
             {
                 let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);

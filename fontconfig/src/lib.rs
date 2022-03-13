@@ -227,6 +227,31 @@ impl<'fc> Pattern<'fc> {
         }
     }
 
+    /// Get the languages set of this pattern.
+    pub fn get_lang_set<'a>(&'a self) -> Option<Vec<&'a str>> {
+        unsafe {
+            let mut ret: *mut sys::FcLangSet = ptr::null_mut();
+            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, b"lang\0".as_ptr() as *const i8, 0, &mut ret as *mut _)
+                == sys::FcResultMatch
+            {
+                let ss: *mut FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
+                let lang_strs: *mut FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
+                let mut res = vec![];
+                loop {
+                    let lang_str: *mut sys::FcChar8 = ffi_dispatch!(LIB, FcStrListNext, lang_strs);
+                    if lang_str == ptr::null_mut() {
+                        break;
+                    }
+                    let cstr = CStr::from_ptr(lang_str as *const c_char);
+                    res.push(cstr.to_str().unwrap());
+                }
+                Some(res)
+            } else {
+                None
+            }
+        }
+    }
+
     /// Print this pattern to stdout with all its values.
     pub fn print(&self) {
         unsafe {

@@ -1,5 +1,5 @@
-fontconfig-rs
-=============
+fontconfig
+==========
 
 <div align="center">
   <a href="https://travis-ci.com/yeslogic/fontconfig-rs">
@@ -22,6 +22,7 @@ A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating 
 Dependencies
 ------------
 
+* Alpine Linux: `fontconfig-dev`
 * Arch Linux: `fontconfig`
 * Debian-based systems: `libfontconfig1-dev`
 * FreeBSD: `fontconfig`

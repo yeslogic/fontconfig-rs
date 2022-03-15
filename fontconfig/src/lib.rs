@@ -44,7 +44,6 @@
 //! [dlopen] function. This can be useful in cross-compiling situations as you don't need to have a
 //! version of Fontcofig available for the target platform available at compile time.
 
-
 use fontconfig_sys as sys;
 use fontconfig_sys::ffi_dispatch;
 
@@ -165,12 +164,12 @@ impl Font {
 #[repr(C)]
 pub struct Pattern<'fc> {
     /// Raw pointer to `FcPattern`
-    pub pat: *mut FcPattern,
+    pat: *mut FcPattern,
     fc: &'fc Fontconfig,
 }
 
 impl<'fc> Pattern<'fc> {
-    /// Create a new `Pattern`.
+    /// Create a new empty `Pattern`.
     pub fn new(fc: &Fontconfig) -> Pattern {
         let pat = unsafe { ffi_dispatch!(LIB, FcPatternCreate,) };
         assert!(!pat.is_null());
@@ -178,11 +177,13 @@ impl<'fc> Pattern<'fc> {
         Pattern { pat, fc }
     }
 
-    /// Create a `Pattern` from a raw fontconfig FcPattern pointer. The pattern is referenced.
-    pub fn from_pattern(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern {
-        unsafe {
-            ffi_dispatch!(LIB, FcPatternReference, pat);
-        }
+    /// Create a `Pattern` from a raw fontconfig FcPattern pointer.
+    ///
+    /// The pattern is referenced.
+    ///
+    /// **Safety:** The pattern pointer must be valid/non-null.
+    pub unsafe fn from_pattern(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern {
+        ffi_dispatch!(LIB, FcPatternReference, pat);
 
         Pattern { pat, fc }
     }
@@ -194,7 +195,13 @@ impl<'fc> Pattern<'fc> {
     /// [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html
     pub fn add_string(&mut self, name: &CStr, val: &CStr) {
         unsafe {
-            ffi_dispatch!(LIB, FcPatternAddString, self.pat, name.as_ptr(), val.as_ptr() as *const u8);
+            ffi_dispatch!(
+                LIB,
+                FcPatternAddString,
+                self.pat,
+                name.as_ptr(),
+                val.as_ptr() as *const u8
+            );
         }
     }
 
@@ -202,8 +209,14 @@ impl<'fc> Pattern<'fc> {
     pub fn get_string<'a>(&'a self, name: &'a CStr) -> Option<&'a str> {
         unsafe {
             let mut ret: *mut sys::FcChar8 = ptr::null_mut();
-            if ffi_dispatch!(LIB, FcPatternGetString, self.pat, name.as_ptr(), 0, &mut ret as *mut _)
-                == sys::FcResultMatch
+            if ffi_dispatch!(
+                LIB,
+                FcPatternGetString,
+                self.pat,
+                name.as_ptr(),
+                0,
+                &mut ret as *mut _
+            ) == sys::FcResultMatch
             {
                 let cstr = CStr::from_ptr(ret as *const c_char);
                 Some(cstr.to_str().unwrap())
@@ -217,8 +230,14 @@ impl<'fc> Pattern<'fc> {
     pub fn get_int(&self, name: &CStr) -> Option<i32> {
         unsafe {
             let mut ret: i32 = 0;
-            if ffi_dispatch!(LIB, FcPatternGetInteger, self.pat, name.as_ptr(), 0, &mut ret as *mut i32)
-                == sys::FcResultMatch
+            if ffi_dispatch!(
+                LIB,
+                FcPatternGetInteger,
+                self.pat,
+                name.as_ptr(),
+                0,
+                &mut ret as *mut i32
+            ) == sys::FcResultMatch
             {
                 Some(ret)
             } else {
@@ -242,7 +261,13 @@ impl<'fc> Pattern<'fc> {
 
     fn config_substitute(&mut self) {
         unsafe {
-            ffi_dispatch!(LIB, FcConfigSubstitute, ptr::null_mut(), self.pat, sys::FcMatchPattern);
+            ffi_dispatch!(
+                LIB,
+                FcConfigSubstitute,
+                ptr::null_mut(),
+                self.pat,
+                sys::FcMatchPattern
+            );
         }
     }
 
@@ -296,6 +321,16 @@ impl<'fc> Pattern<'fc> {
             .ok_or_else(|| UnknownFontFormat(String::new()))
             .and_then(|format| format.parse())
     }
+
+    /// Returns a raw pointer to underlying `FcPattern`.
+    pub fn as_ptr(&self) -> *const FcPattern {
+        self.pat
+    }
+
+    /// Returns an unsafe mutable pointer to the underlying `FcPattern`.
+    pub fn as_mut_ptr(&mut self) -> *mut FcPattern {
+        self.pat
+    }
 }
 
 impl<'fc> std::fmt::Debug for Pattern<'fc> {
@@ -341,8 +376,10 @@ impl<'fc> FontSet<'fc> {
 
     /// Wrap an existing `FcFontSet`.
     ///
-    /// This returned wrapper assumes ownership of the `FcFontSet`.
-    pub fn from_raw(fc: &Fontconfig, raw_set: *mut sys::FcFontSet) -> FontSet {
+    /// The returned wrapper assumes ownership of the `FcFontSet`.
+    ///
+    /// **Safety:** The font set pointer must be valid/non-null.
+    pub unsafe fn from_raw(fc: &Fontconfig, raw_set: *mut sys::FcFontSet) -> FontSet {
         FontSet { fcset: raw_set, fc }
     }
 
@@ -367,7 +404,7 @@ impl<'fc> FontSet<'fc> {
         };
         patterns
             .iter()
-            .map(move |&pat| Pattern::from_pattern(self.fc, pat))
+            .map(move |&pat| unsafe { Pattern::from_pattern(self.fc, pat) })
     }
 }
 
@@ -380,8 +417,10 @@ impl<'fc> Drop for FontSet<'fc> {
 /// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
 pub fn list_fonts<'fc>(pattern: &Pattern<'fc>, objects: Option<&ObjectSet>) -> FontSet<'fc> {
     let os = objects.map(|o| o.fcset).unwrap_or(ptr::null_mut());
-    let ptr = unsafe { ffi_dispatch!(LIB, FcFontList, ptr::null_mut(), pattern.pat, os) };
-    FontSet::from_raw(pattern.fc, ptr)
+    unsafe {
+        let raw_set = ffi_dispatch!(LIB, FcFontList, ptr::null_mut(), pattern.pat, os);
+        FontSet::from_raw(pattern.fc, raw_set)
+    }
 }
 
 /// Wrapper around `FcObjectSet`.
@@ -401,8 +440,9 @@ impl ObjectSet {
     /// Wrap an existing `FcObjectSet`.
     ///
     /// The `FcObjectSet` must not be null. This method assumes ownership of the `FcObjectSet`.
-    pub fn from_raw(_: &Fontconfig, raw_set: *mut sys::FcObjectSet) -> ObjectSet {
-        assert!(!raw_set.is_null());
+    ///
+    /// **Safety:** The object set pointer must be valid/non-null.
+    pub unsafe fn from_raw(_: &Fontconfig, raw_set: *mut sys::FcObjectSet) -> ObjectSet {
         ObjectSet { fcset: raw_set }
     }
 

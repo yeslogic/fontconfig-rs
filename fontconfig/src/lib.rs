@@ -44,6 +44,7 @@
 //! [dlopen] function. This can be useful in cross-compiling situations as you don't need to have a
 //! version of Fontcofig available for the target platform available at compile time.
 
+
 use fontconfig_sys as sys;
 use fontconfig_sys::ffi_dispatch;
 
@@ -194,13 +195,7 @@ impl<'fc> Pattern<'fc> {
     /// [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html
     pub fn add_string(&mut self, name: &CStr, val: &CStr) {
         unsafe {
-            ffi_dispatch!(
-                LIB,
-                FcPatternAddString,
-                self.pat,
-                name.as_ptr(),
-                val.as_ptr() as *const u8
-            );
+            ffi_dispatch!(LIB, FcPatternAddString, self.pat, name.as_ptr(), val.as_ptr() as *const u8);
         }
     }
 
@@ -208,14 +203,8 @@ impl<'fc> Pattern<'fc> {
     pub fn get_string<'a>(&'a self, name: &'a CStr) -> Option<&'a str> {
         unsafe {
             let mut ret: *mut sys::FcChar8 = ptr::null_mut();
-            if ffi_dispatch!(
-                LIB,
-                FcPatternGetString,
-                self.pat,
-                name.as_ptr(),
-                0,
-                &mut ret as *mut _
-            ) == sys::FcResultMatch
+            if ffi_dispatch!(LIB, FcPatternGetString, self.pat, name.as_ptr(), 0, &mut ret as *mut _)
+                == sys::FcResultMatch
             {
                 let cstr = CStr::from_ptr(ret as *const c_char);
                 Some(cstr.to_str().unwrap())
@@ -229,14 +218,8 @@ impl<'fc> Pattern<'fc> {
     pub fn get_int(&self, name: &CStr) -> Option<i32> {
         unsafe {
             let mut ret: i32 = 0;
-            if ffi_dispatch!(
-                LIB,
-                FcPatternGetInteger,
-                self.pat,
-                name.as_ptr(),
-                0,
-                &mut ret as *mut i32
-            ) == sys::FcResultMatch
+            if ffi_dispatch!(LIB, FcPatternGetInteger, self.pat, name.as_ptr(), 0, &mut ret as *mut i32)
+                == sys::FcResultMatch
             {
                 Some(ret)
             } else {
@@ -260,13 +243,7 @@ impl<'fc> Pattern<'fc> {
 
     fn config_substitute(&mut self) {
         unsafe {
-            ffi_dispatch!(
-                LIB,
-                FcConfigSubstitute,
-                ptr::null_mut(),
-                self.pat,
-                sys::FcMatchPattern
-            );
+            ffi_dispatch!(LIB, FcConfigSubstitute, ptr::null_mut(), self.pat, sys::FcMatchPattern);
         }
     }
 
@@ -353,15 +330,12 @@ impl<'fc> Drop for Pattern<'fc> {
 /// Wrapper around `FcStrList`
 pub struct StrList<'a> {
     list: *mut FcStrList,
-    _life: &'a PhantomData<()>,
+    _life: &'a PhantomData<()>
 }
 
 impl<'a> StrList<'a> {
     unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrSet) -> Self {
-        Self {
-            list: raw_list,
-            _life: &PhantomData,
-        }
+        Self { list: raw_list, _life: &PhantomData }
     }
 }
 
@@ -392,15 +366,7 @@ impl Pattern<'_> {
     pub fn lang_set(&self) -> Option<StrList<'_>> {
         unsafe {
             let mut ret: *mut sys::FcLangSet = ptr::null_mut();
-            if ffi_dispatch!(
-                LIB,
-                FcPatternGetLangSet,
-                self.pat,
-                FC_LANG.as_ptr(),
-                0,
-                &mut ret as *mut _
-            ) == sys::FcResultMatch
-            {
+            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, FC_LANG.as_ptr(), 0, &mut ret as *mut _) == sys::FcResultMatch {
                 let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
                 let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
                 Some(StrList::from_raw(self.fc, lang_strs))

@@ -329,7 +329,7 @@ impl<'fc> Drop for Pattern<'fc> {
 
 /// Wrapper around `FcStrList`
 pub struct StrList<'a> {
-    list: *mut FcStrList,
+    list: *mut sys::FcStrList,
     _life: &'a PhantomData<()>
 }
 

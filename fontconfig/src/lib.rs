@@ -397,14 +397,14 @@ impl Pattern<'_> {
 /// ```
 pub struct StrList<'a> {
     list: *mut sys::FcStrList,
-    _life: &'a PhantomData<()>,
+    _life: PhantomData<&'a sys::FcStrList>,
 }
 
 impl<'a> StrList<'a> {
     unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrSet) -> Self {
         Self {
             list: raw_list,
-            _life: &PhantomData,
+            _life: PhantomData,
         }
     }
 }

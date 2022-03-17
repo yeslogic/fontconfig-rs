@@ -362,15 +362,50 @@ impl<'fc> Drop for Pattern<'fc> {
     }
 }
 
+impl Pattern<'_> {
+    /// Get the languages set of this pattern.
+    pub fn lang_set(&self) -> Option<StrList<'_>> {
+        unsafe {
+            let mut ret: *mut sys::FcLangSet = ptr::null_mut();
+            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, FC_LANG.as_ptr(), 0, &mut ret as *mut _) == sys::FcResultMatch {
+                let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
+                let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
+                Some(StrList::from_raw(self.fc, lang_strs))
+            } else {
+                None
+            }
+        }
+    }
+}
+
 /// Wrapper around `FcStrList`
+///
+/// The wrapper implements `Iterator` so it can be iterated directly, filtered etc.
+/// **Note:** Any entries in the `StrList` that are not valid UTF-8 will be skipped.
+///
+/// ```
+/// use fontconfig::{Fontconfig, Pattern};
+///
+/// let fc = Fontconfig::new().expect("unable to init Fontconfig");
+///
+/// // Find fonts that support japanese
+/// let fonts = fontconfig::list_fonts(&Pattern::new(&fc), None);
+/// let ja_fonts: Vec<_> = fonts
+///     .iter()
+///     .filter(|p| p.lang_set().map_or(false, |mut langs| langs.any(|l| l == "ja")))
+///     .collect();
+/// ```
 pub struct StrList<'a> {
     list: *mut sys::FcStrList,
-    _life: &'a PhantomData<()>
+    _life: &'a PhantomData<()>,
 }
 
 impl<'a> StrList<'a> {
     unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrSet) -> Self {
-        Self { list: raw_list, _life: &PhantomData }
+        Self {
+            list: raw_list,
+            _life: &PhantomData,
+        }
     }
 }
 
@@ -391,22 +426,6 @@ impl<'a> Iterator for StrList<'a> {
             match unsafe { CStr::from_ptr(lang_str as *const c_char) }.to_str() {
                 Ok(s) => Some(s),
                 _ => self.next(),
-            }
-        }
-    }
-}
-
-impl Pattern<'_> {
-    /// Get the languages set of this pattern.
-    pub fn lang_set(&self) -> Option<StrList<'_>> {
-        unsafe {
-            let mut ret: *mut sys::FcLangSet = ptr::null_mut();
-            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, FC_LANG.as_ptr(), 0, &mut ret as *mut _) == sys::FcResultMatch {
-                let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
-                let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
-                Some(StrList::from_raw(self.fc, lang_strs))
-            } else {
-                None
             }
         }
     }
@@ -557,5 +576,28 @@ mod tests {
 
         // Ensure that the set can be iterated again
         assert!(fontset.iter().count() > 0);
+    }
+
+    #[test]
+    fn iter_lang_set() {
+        let fc = Fontconfig::new().unwrap();
+        let mut pat = Pattern::new(&fc);
+        let family = CString::new("dejavu sans").unwrap();
+        pat.add_string(FC_FAMILY.as_cstr(), &family);
+        let pattern = pat.font_match();
+        for lang in pattern.lang_set().unwrap() {
+            println!("{:?}", lang);
+        }
+
+        // Test find
+        assert!(pattern
+            .lang_set()
+            .unwrap()
+            .find(|&lang| lang == "za")
+            .is_some());
+
+        // Test collect
+        let langs = pattern.lang_set().unwrap().collect::<Vec<_>>();
+        assert!(langs.iter().find(|&&l| l == "ie").is_some());
     }
 }

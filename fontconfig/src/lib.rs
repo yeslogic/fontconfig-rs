@@ -53,6 +53,7 @@ use sys::statics::{LIB, LIB_RESULT};
 use sys::*;
 
 use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_char;
 use std::path::PathBuf;
@@ -357,6 +358,56 @@ impl<'fc> Drop for Pattern<'fc> {
     fn drop(&mut self) {
         unsafe {
             ffi_dispatch!(LIB, FcPatternDestroy, self.pat);
+        }
+    }
+}
+
+/// Wrapper around `FcStrList`
+pub struct StrList<'a> {
+    list: *mut sys::FcStrList,
+    _life: &'a PhantomData<()>
+}
+
+impl<'a> StrList<'a> {
+    unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrSet) -> Self {
+        Self { list: raw_list, _life: &PhantomData }
+    }
+}
+
+impl<'a> Drop for StrList<'a> {
+    fn drop(&mut self) {
+        unsafe { ffi_dispatch!(LIB, FcStrListDone, self.list) };
+    }
+}
+
+impl<'a> Iterator for StrList<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<&'a str> {
+        let lang_str: *mut sys::FcChar8 = unsafe { ffi_dispatch!(LIB, FcStrListNext, self.list) };
+        if lang_str.is_null() {
+            None
+        } else {
+            match unsafe { CStr::from_ptr(lang_str as *const c_char) }.to_str() {
+                Ok(s) => Some(s),
+                _ => self.next(),
+            }
+        }
+    }
+}
+
+impl Pattern<'_> {
+    /// Get the languages set of this pattern.
+    pub fn lang_set(&self) -> Option<StrList<'_>> {
+        unsafe {
+            let mut ret: *mut sys::FcLangSet = ptr::null_mut();
+            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, FC_LANG.as_ptr(), 0, &mut ret as *mut _) == sys::FcResultMatch {
+                let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
+                let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
+                Some(StrList::from_raw(self.fc, lang_strs))
+            } else {
+                None
+            }
         }
     }
 }

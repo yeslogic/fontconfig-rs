@@ -43,6 +43,8 @@
 //! library at link time. Instead, Fontconfig will be dynamically loaded at runtime with the
 //! [dlopen] function. This can be useful in cross-compiling situations as you don't need to have a
 //! version of Fontcofig available for the target platform available at compile time.
+//!
+//! [dlopen]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/dlopen.html
 
 use fontconfig_sys as sys;
 use fontconfig_sys::ffi_dispatch;

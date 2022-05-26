@@ -288,6 +288,33 @@ impl<'fc> Pattern<'fc> {
         }
     }
 
+    /// Get the list of fonts sorted by closeness to self.
+    /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
+    pub fn font_sort(&mut self, trim: bool) -> FontSet {
+        self.default_substitute();
+        self.config_substitute();
+        unsafe {
+            // What is this result actually used for? Seems redundant with
+            // return type.
+            let mut res = sys::FcResultNoMatch;
+
+            let mut charsets: *mut _ = ptr::null_mut();
+
+            FontSet::from_raw(
+                self.fc,
+                ffi_dispatch!(
+                    LIB,
+                    FcFontSort,
+                    ptr::null_mut(),
+                    self.pat,
+                    if trim { 1 } else { 0 }, // Trim font list.
+                    &mut charsets,
+                    &mut res
+                ),
+            )
+        }
+    }
+
     /// Get the "fullname" (human-readable name) of this pattern.
     pub fn name(&self) -> Option<&str> {
         self.get_string(FC_FULLNAME.as_cstr())

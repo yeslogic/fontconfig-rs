@@ -396,7 +396,15 @@ impl Pattern<'_> {
     pub fn lang_set(&self) -> Option<StrList<'_>> {
         unsafe {
             let mut ret: *mut sys::FcLangSet = ptr::null_mut();
-            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, FC_LANG.as_ptr(), 0, &mut ret as *mut _) == sys::FcResultMatch {
+            if ffi_dispatch!(
+                LIB,
+                FcPatternGetLangSet,
+                self.pat,
+                FC_LANG.as_ptr(),
+                0,
+                &mut ret as *mut _
+            ) == sys::FcResultMatch
+            {
                 let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
                 let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
                 Some(StrList::from_raw(self.fc, lang_strs))
@@ -574,6 +582,100 @@ impl FromStr for FontFormat {
             "Windows FNT" => Ok(FontFormat::WindowsFNT),
             _ => Err(UnknownFontFormat(s.to_string())),
         }
+    }
+}
+
+/// Wrapper around `FcCharSet`.
+pub struct CharSet<'fc> {
+    fcset: *mut sys::FcCharSet,
+    fc: &'fc Fontconfig,
+}
+
+impl<'fc> CharSet<'fc> {
+    /// Create a new, empty `CharSet`.
+    pub fn new(fc: &Fontconfig) -> CharSet {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCreate,) };
+        CharSet { fcset, fc }
+    }
+
+    /// Count entries in a charset
+    pub fn len(&self) -> usize {
+        let size = unsafe { ffi_dispatch!(LIB, FcCharSetCount, self.fcset) };
+        size as usize
+    }
+
+    /// Add a character to the `CharSet`.
+    pub fn add_char(&mut self, c: char) {
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetAddChar, self.fcset, c as u32) };
+        assert_eq!(res, FcTrue);
+    }
+
+    /// Delete a character from the `CharSet
+    pub fn del_char(&mut self, c: char) {
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetDelChar, self.fcset, c as u32) };
+        assert_eq!(res, FcTrue);
+    }
+
+    /// Check if a character is in the `CharSet`.
+    pub fn has_char(&self, c: char) -> bool {
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetHasChar, self.fcset, c as u32) };
+        res == FcTrue
+    }
+
+    /// Check if self is equal to other `CharSet`.
+    pub fn equals(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    /// Check if self is a subset of other `CharSet`.
+    pub fn is_subset(&self, other: &Self) -> bool {
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetIsSubset, self.fcset, other.fcset) };
+        res == FcTrue
+    }
+
+    /// Merge self with other `CharSet`.
+    pub fn merge(&mut self, other: &Self) {
+        let mut res = FcTrue;
+        unsafe { ffi_dispatch!(LIB, FcCharSetMerge, self.fcset, other.fcset, &mut res) };
+        assert_eq!(res, FcTrue);
+    }
+
+    /// Intersect self with other `CharSet`.
+    pub fn intersect(&mut self, other: &Self) -> Self {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetIntersect, self.fcset, other.fcset) };
+        Self { fc: self.fc, fcset }
+    }
+
+    /// Subtract other `CharSet` from self.
+    pub fn subtract(&mut self, other: &Self) -> Self {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetSubtract, self.fcset, other.fcset) };
+        Self { fc: self.fc, fcset }
+    }
+
+    /// Union self with other `CharSet`.
+    pub fn union(&mut self, other: &Self) -> Self {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetUnion, self.fcset, other.fcset) };
+        Self { fc: self.fc, fcset }
+    }
+}
+
+impl<'fc> PartialEq for CharSet<'fc> {
+    fn eq(&self, other: &Self) -> bool {
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetEqual, self.fcset, other.fcset) };
+        res == FcTrue
+    }
+}
+
+impl<'fc> Clone for CharSet<'fc> {
+    fn clone(&self) -> Self {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCopy, self.fcset) };
+        CharSet { fcset, fc: self.fc }
+    }
+}
+
+impl<'fc> Drop for CharSet<'fc> {
+    fn drop(&mut self) {
+        unsafe { ffi_dispatch!(LIB, FcCharSetDestroy, self.fcset) };
     }
 }
 

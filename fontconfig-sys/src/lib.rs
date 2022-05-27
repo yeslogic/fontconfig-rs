@@ -400,6 +400,8 @@ dlib::external_library!(Fc, "fontconfig",
 
         fn FcCharSetAddChar(*mut FcCharSet, FcChar32) -> FcBool,
 
+        fn FcCharSetDelChar(*mut FcCharSet, FcChar32) -> FcBool,
+
         fn FcCharSetCopy(*mut FcCharSet) -> *mut FcCharSet,
 
         fn FcCharSetEqual(*const FcCharSet, *const FcCharSet) -> FcBool,

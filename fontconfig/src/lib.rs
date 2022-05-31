@@ -290,9 +290,10 @@ impl<'fc> Pattern<'fc> {
 
     /// Get the list of fonts sorted by closeness to self.
     /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
-    pub fn font_sort(&mut self, trim: bool) -> FontSet {
+    pub fn font_sort(&mut self, trim: bool) -> Option<FontSet> {
         self.default_substitute();
         self.config_substitute();
+        let pat = self.clone();
         unsafe {
             // What is this result actually used for? Seems redundant with
             // return type.
@@ -300,18 +301,20 @@ impl<'fc> Pattern<'fc> {
 
             let mut charsets: *mut _ = ptr::null_mut();
 
-            FontSet::from_raw(
-                self.fc,
-                ffi_dispatch!(
-                    LIB,
-                    FcFontSort,
-                    ptr::null_mut(),
-                    self.pat,
-                    if trim { 1 } else { 0 }, // Trim font list.
-                    &mut charsets,
-                    &mut res
-                ),
-            )
+            let raw = ffi_dispatch!(
+                LIB,
+                FcFontSort,
+                ptr::null_mut(),
+                pat.pat,
+                if trim { FcTrue } else { FcFalse }, // Trim font list.
+                &mut charsets,
+                &mut res
+            );
+            if res == sys::FcResultMatch {
+                Some(FontSet::from_raw(self.fc, raw))
+            } else {
+                None
+            }
         }
     }
 
@@ -595,6 +598,7 @@ impl<'fc> CharSet<'fc> {
     /// Create a new, empty `CharSet`.
     pub fn new(fc: &Fontconfig) -> CharSet {
         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCreate,) };
+        assert!(!fcset.is_null(), "Can't create CharSet");
         CharSet { fcset, fc }
     }
 
@@ -622,11 +626,6 @@ impl<'fc> CharSet<'fc> {
         res == FcTrue
     }
 
-    /// Check if self is equal to other `CharSet`.
-    pub fn equals(&self, other: &Self) -> bool {
-        self == other
-    }
-
     /// Check if self is a subset of other `CharSet`.
     pub fn is_subset(&self, other: &Self) -> bool {
         let res = unsafe { ffi_dispatch!(LIB, FcCharSetIsSubset, self.fcset, other.fcset) };
@@ -635,26 +634,36 @@ impl<'fc> CharSet<'fc> {
 
     /// Merge self with other `CharSet`.
     pub fn merge(&mut self, other: &Self) {
-        let mut res = FcTrue;
-        unsafe { ffi_dispatch!(LIB, FcCharSetMerge, self.fcset, other.fcset, &mut res) };
+        let res = unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcCharSetMerge,
+                self.fcset,
+                other.fcset,
+                ptr::null_mut()
+            )
+        };
         assert_eq!(res, FcTrue);
     }
 
     /// Intersect self with other `CharSet`.
     pub fn intersect(&mut self, other: &Self) -> Self {
         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetIntersect, self.fcset, other.fcset) };
+        assert!(!fcset.is_null(), "intersect failed");
         Self { fc: self.fc, fcset }
     }
 
     /// Subtract other `CharSet` from self.
     pub fn subtract(&mut self, other: &Self) -> Self {
         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetSubtract, self.fcset, other.fcset) };
+        assert!(!fcset.is_null(), "subtract failed");
         Self { fc: self.fc, fcset }
     }
 
     /// Union self with other `CharSet`.
     pub fn union(&mut self, other: &Self) -> Self {
         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetUnion, self.fcset, other.fcset) };
+        assert!(!fcset.is_null(), "union failed");
         Self { fc: self.fc, fcset }
     }
 }
@@ -669,6 +678,7 @@ impl<'fc> PartialEq for CharSet<'fc> {
 impl<'fc> Clone for CharSet<'fc> {
     fn clone(&self) -> Self {
         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCopy, self.fcset) };
+        assert!(!fcset.is_null(), "Can't clone CharSet");
         CharSet { fcset, fc: self.fc }
     }
 }
@@ -721,14 +731,25 @@ mod tests {
         }
 
         // Test find
-        assert!(pattern
-            .lang_set()
-            .unwrap()
-            .find(|&lang| lang == "za")
-            .is_some());
+        assert!(pattern.lang_set().unwrap().any(|lang| lang == "za"));
 
         // Test collect
         let langs = pattern.lang_set().unwrap().collect::<Vec<_>>();
-        assert!(langs.iter().find(|&&l| l == "ie").is_some());
+        assert!(langs.iter().any(|&l| l == "ie"));
+    }
+
+    #[test]
+    fn iter_font_sort() {
+        let fc = Fontconfig::new().unwrap();
+        let mut pat = Pattern::new(&fc);
+        let family = CString::new("dejavu sans").unwrap();
+        pat.add_string(FC_FAMILY.as_cstr(), &family);
+        let font_set = pat.font_sort(false).unwrap();
+
+        for font in font_set.iter() {
+            println!("{:?}", font.name());
+        }
+        assert!(font_set.iter().count() > 1);
+        assert!(font_set.iter().next().unwrap().name().unwrap() == "DejaVu Sans");
     }
 }

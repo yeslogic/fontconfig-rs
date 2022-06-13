@@ -18,6 +18,9 @@ homepage = "https://github.com/yeslogic/fontconfig-rs"
 documentation = "https://docs.rs/crate/fontconfig"
 repository = "https://github.com/yeslogic/fontconfig-rs"
 
+[dependencies]
+thiserror = "1.0"
+
 [dependencies.yeslogic-fontconfig-sys]
 version = "3.0.0"
 path = "../fontconfig-sys"

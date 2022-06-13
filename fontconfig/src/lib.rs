@@ -59,27 +59,112 @@ use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_char;
 use std::path::PathBuf;
-use std::ptr;
+use std::ptr::{self, NonNull};
 use std::str::FromStr;
 
 pub use sys::constants::*;
 use sys::{FcBool, FcPattern};
+
+use thiserror::Error;
+
+mod langset;
+pub use langset::{LangSet, LangSetCmp};
+
+mod fontset;
+pub use fontset::{FontSet, FontSetIter};
+
+mod stringset;
+pub use stringset::{StringSet, StringSetIter};
+
+mod matrix;
+pub use matrix::Matrix;
 
 #[allow(non_upper_case_globals)]
 const FcTrue: FcBool = 1;
 #[allow(non_upper_case_globals, dead_code)]
 const FcFalse: FcBool = 0;
 
+type Result<T> = std::result::Result<T, Error>;
+
 /// Handle obtained after Fontconfig has been initialised.
-pub struct Fontconfig {
-    _initialised: (),
+pub struct FontConfig {
+    cfg: Option<NonNull<sys::FcConfig>>,
 }
 
 /// Error type returned from Pattern::format.
 ///
 /// The error holds the name of the unknown format.
-#[derive(Debug)]
-pub struct UnknownFontFormat(pub String);
+#[derive(Debug, Error)]
+pub enum Error {
+    /// The format is not known.
+    #[error("Unknown format {0}")]
+    UnknownFontFormat(String),
+    /// Out of memory error.
+    #[error("malloc failed")]
+    OutOfMemory,
+    /// Object exists, but has fewer values than specified
+    #[error("Object exists, but has fewer values than specified")]
+    NoId,
+    /// Object exists, but the type doesn't match.
+    #[error("Object exists, but the type doesn't match")]
+    TypeMismatch,
+    /// Object doesn't exist at all.
+    #[error("Object doesn't exist at all")]
+    NoMatch,
+}
+
+trait ToResult {
+    fn ok(&self) -> Result<()>;
+
+    fn opt(&self) -> Option<()> {
+        self.ok().ok()
+    }
+}
+
+impl ToResult for sys::FcResult {
+    fn ok(&self) -> Result<()> {
+        match *self {
+            sys::FcResultMatch => Ok(()),
+            sys::FcResultNoMatch => Err(Error::NoMatch),
+            sys::FcResultTypeMismatch => Err(Error::TypeMismatch),
+            sys::FcResultNoId => Err(Error::NoId),
+            _ => unreachable!(),
+        }
+    }
+}
+
+///
+pub enum MatchKind {
+    /// Tagged as pattern operations are applied
+    Pattern,
+    /// Tagged as font operations are applied and `pat` is used for <test> elements with target=pattern
+    Font,
+    ///
+    Scan,
+}
+
+#[doc(hidden)]
+impl From<sys::FcMatchKind> for MatchKind {
+    fn from(kind: sys::FcMatchKind) -> Self {
+        match kind {
+            sys::FcMatchPattern => MatchKind::Pattern,
+            sys::FcMatchFont => MatchKind::Font,
+            sys::FcMatchScan => MatchKind::Scan,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[doc(hidden)]
+impl From<MatchKind> for sys::FcMatchKind {
+    fn from(kind: MatchKind) -> sys::FcMatchKind {
+        match kind {
+            MatchKind::Pattern => sys::FcMatchPattern,
+            MatchKind::Font => sys::FcMatchFont,
+            MatchKind::Scan => sys::FcMatchScan,
+        }
+    }
+}
 
 /// The format of a font matched by Fontconfig.
 #[derive(Eq, PartialEq)]
@@ -96,7 +181,7 @@ pub enum FontFormat {
     WindowsFNT,
 }
 
-impl Fontconfig {
+impl FontConfig {
     /// Initialise Fontconfig and return a handle allowing further interaction with the API.
     ///
     /// If Fontconfig fails to initialise, returns `None`.
@@ -105,17 +190,96 @@ impl Fontconfig {
         if LIB_RESULT.is_err() {
             return None;
         }
-        if unsafe { ffi_dispatch!(LIB, FcInit,) == FcTrue } {
-            Some(Fontconfig { _initialised: () })
-        } else {
-            None
+        let cfg = unsafe { ffi_dispatch!(LIB, FcConfigCreate,) };
+        Some(FontConfig {
+            cfg: Some(NonNull::new(cfg)?),
+        })
+    }
+
+    /// Returns the current default configuration.
+    pub fn current() -> Self {
+        unsafe {
+            ffi_dispatch!(LIB, FcInit,);
+        };
+        FontConfig { cfg: None }
+    }
+
+    /// Set configuration as default.
+    ///
+    /// Sets the current default configuration to config.
+    /// Implicitly calls FcConfigBuildFonts if necessary,
+    /// and FcConfigReference() to inrease the reference count in config since 2.12.0,
+    /// returning FcFalse if that call fails.
+    // pub fn set_current(config: &mut FontConfig) {
+    //     //
+    // }
+
+    /// Execute substitutions
+    ///
+    /// Calls FcConfigSubstituteWithPat setting p_pat to NULL.
+    /// Returns false if the substitution cannot be performed (due to allocation failure).
+    /// Otherwise returns true.
+    pub fn substitute(&mut self, pat: &mut Pattern, kind: MatchKind) {
+        unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcConfigSubstitute,
+                self.as_mut_ptr(),
+                pat.as_mut_ptr(),
+                kind.into()
+            );
+        }
+    }
+
+    /// Return the best font from a set of font sets
+    ///
+    /// Finds the font in sets most closely matching pattern and
+    /// returns the result of FcFontRenderPrepare for that font and the provided pattern.
+    /// This function should be called only after FcConfigSubstitute and FcDefaultSubstitute have been called for pattern;
+    /// otherwise the results will not be correct.
+    /// If config is NULL, the current configuration is used.
+    /// Returns NULL if an error occurs during this process.
+    pub fn match_(&mut self, sets: &mut [FontSet], pat: &mut Pattern) -> Pattern {
+        pat.default_substitute();
+        self.substitute(pat, MatchKind::Font);
+        let mut result = sys::FcResultNoMatch;
+        let pat = unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcFontSetMatch,
+                self.as_mut_ptr(),
+                &mut sets.as_mut_ptr().cast(),
+                sets.len() as i32,
+                pat.as_mut_ptr(),
+                &mut result
+            )
+        };
+        result.ok().unwrap();
+        Pattern {
+            pat: NonNull::new(pat).unwrap(),
         }
     }
 
     /// Find a font of the given `family` (e.g. Dejavu Sans, FreeSerif),
     /// optionally filtering by `style`. Both fields are case-insensitive.
-    pub fn find(&self, family: &str, style: Option<&str>) -> Option<Font> {
-        Font::find(self, family, style)
+    // pub fn find(&self, family: &str, style: Option<&str>) -> Option<Font> {
+    //     Font::find(self, family, style)
+    // }
+
+    fn as_mut_ptr(&mut self) -> *mut sys::FcConfig {
+        if let Some(ref mut cfg) = self.cfg {
+            cfg.as_ptr()
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    fn as_ptr(&self) -> *const sys::FcConfig {
+        if let Some(ref cfg) = self.cfg {
+            cfg.as_ptr()
+        } else {
+            ptr::null_mut()
+        }
     }
 }
 
@@ -136,9 +300,9 @@ pub struct Font {
     pub path: PathBuf,
 }
 
-impl Font {
-    fn find(fc: &Fontconfig, family: &str, style: Option<&str>) -> Option<Font> {
-        let mut pat = Pattern::new(fc);
+impl FontConfig {
+    fn find(&mut self, family: &str, style: Option<&str>) -> Option<Font> {
+        let mut pat = Pattern::new();
         let family = CString::new(family).ok()?;
         pat.add_string(FC_FAMILY.as_cstr(), &family);
 
@@ -147,7 +311,7 @@ impl Font {
             pat.add_string(FC_STYLE.as_cstr(), &style);
         }
 
-        let font_match = pat.font_match();
+        let font_match = pat.font_match(self);
 
         font_match.name().and_then(|name| {
             font_match.filename().map(|filename| Font {
@@ -156,7 +320,9 @@ impl Font {
             })
         })
     }
+}
 
+impl Font {
     #[allow(dead_code)]
     fn print_debug(&self) {
         println!("Name: {}\nPath: {}", self.name, self.path.display());
@@ -164,32 +330,36 @@ impl Font {
 }
 
 /// A safe wrapper around fontconfig's `FcPattern`.
-#[repr(C)]
-pub struct Pattern<'fc> {
+pub struct Pattern {
     /// Raw pointer to `FcPattern`
-    pat: *mut FcPattern,
-    fc: &'fc Fontconfig,
+    pat: NonNull<FcPattern>,
 }
 
-impl<'fc> Pattern<'fc> {
+impl Pattern {
     /// Create a new empty `Pattern`.
-    pub fn new(fc: &Fontconfig) -> Pattern {
+    pub fn new() -> Pattern {
         let pat = unsafe { ffi_dispatch!(LIB, FcPatternCreate,) };
         assert!(!pat.is_null());
 
-        Pattern { pat, fc }
+        Pattern {
+            pat: NonNull::new(pat).expect("out of memory"),
+        }
     }
 
     /// Create a `Pattern` from a raw fontconfig FcPattern pointer.
     ///
     /// The pattern is referenced.
     ///
+    /// **Panic:** If the pointer is null.
+    ///
     /// **Safety:** The pattern pointer must be valid/non-null.
-    pub unsafe fn from_pattern(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern {
-        ffi_dispatch!(LIB, FcPatternReference, pat);
-
-        Pattern { pat, fc }
-    }
+    // pub unsafe fn from_raw(pat: *mut FcPattern) -> Pattern {
+    //     // ffi_dispatch!(LIB, FcPatternReference, pat);
+    //
+    //     Pattern {
+    //         pat: NonNull::new(pat).unwrap(),
+    //     }
+    // }
 
     /// Add a key-value pair to this pattern.
     ///
@@ -201,7 +371,7 @@ impl<'fc> Pattern<'fc> {
             ffi_dispatch!(
                 LIB,
                 FcPatternAddString,
-                self.pat,
+                self.as_mut_ptr(),
                 name.as_ptr(),
                 val.as_ptr() as *const u8
             );
@@ -209,91 +379,80 @@ impl<'fc> Pattern<'fc> {
     }
 
     /// Get string the value for a key from this pattern.
-    pub fn get_string<'a>(&'a self, name: &'a CStr) -> Option<&'a str> {
+    pub fn string<'a>(&'a self, name: &'a CStr) -> Option<&'a str> {
         unsafe {
             let mut ret: *mut sys::FcChar8 = ptr::null_mut();
-            if ffi_dispatch!(
+            ffi_dispatch!(
                 LIB,
                 FcPatternGetString,
-                self.pat,
+                self.pat.as_ptr(),
                 name.as_ptr(),
                 0,
                 &mut ret as *mut _
-            ) == sys::FcResultMatch
-            {
-                let cstr = CStr::from_ptr(ret as *const c_char);
-                Some(cstr.to_str().unwrap())
-            } else {
-                None
-            }
+            )
+            .opt()?;
+            let cstr = CStr::from_ptr(ret as *const c_char);
+            Some(cstr.to_str().unwrap())
         }
     }
 
     /// Get the integer value for a key from this pattern.
-    pub fn get_int(&self, name: &CStr) -> Option<i32> {
+    pub fn int(&self, name: &CStr) -> Option<i32> {
         unsafe {
             let mut ret: i32 = 0;
-            if ffi_dispatch!(
+            ffi_dispatch!(
                 LIB,
                 FcPatternGetInteger,
-                self.pat,
+                self.pat.as_ptr(),
                 name.as_ptr(),
                 0,
                 &mut ret as *mut i32
-            ) == sys::FcResultMatch
-            {
-                Some(ret)
-            } else {
-                None
-            }
+            )
+            .opt()?;
+            Some(ret)
         }
     }
 
     /// Print this pattern to stdout with all its values.
     pub fn print(&self) {
         unsafe {
-            ffi_dispatch!(LIB, FcPatternPrint, &*self.pat);
+            ffi_dispatch!(LIB, FcPatternPrint, self.pat.as_ptr());
         }
     }
 
     fn default_substitute(&mut self) {
         unsafe {
-            ffi_dispatch!(LIB, FcDefaultSubstitute, self.pat);
-        }
-    }
-
-    fn config_substitute(&mut self) {
-        unsafe {
-            ffi_dispatch!(
-                LIB,
-                FcConfigSubstitute,
-                ptr::null_mut(),
-                self.pat,
-                sys::FcMatchPattern
-            );
+            ffi_dispatch!(LIB, FcDefaultSubstitute, self.pat.as_mut());
         }
     }
 
     /// Get the best available match for this pattern, returned as a new pattern.
-    pub fn font_match(&mut self) -> Pattern {
+    pub fn font_match(&mut self, config: &mut FontConfig) -> Pattern {
         self.default_substitute();
-        self.config_substitute();
+        config.substitute(self, MatchKind::Pattern);
 
         unsafe {
             let mut res = sys::FcResultNoMatch;
-            Pattern::from_pattern(
-                self.fc,
-                ffi_dispatch!(LIB, FcFontMatch, ptr::null_mut(), self.pat, &mut res),
-            )
+            let pat = ffi_dispatch!(
+                LIB,
+                FcFontMatch,
+                config.as_mut_ptr(),
+                self.pat.as_mut(),
+                &mut res
+            );
+            res.ok().unwrap();
+            Pattern {
+                pat: NonNull::new(pat).unwrap(),
+            }
         }
     }
 
     /// Get the list of fonts sorted by closeness to self.
     /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
-    pub fn font_sort(&mut self, trim: bool) -> Option<FontSet> {
+    pub fn font_sort(&mut self, config: &mut FontConfig, trim: bool) -> Option<FontSet> {
         self.default_substitute();
-        self.config_substitute();
-        let pat = self.clone();
+        config.substitute(self, MatchKind::Pattern);
+        let mut pat = self.clone();
         unsafe {
             // What is this result actually used for? Seems redundant with
             // return type.
@@ -301,74 +460,135 @@ impl<'fc> Pattern<'fc> {
 
             let mut charsets: *mut _ = ptr::null_mut();
 
-            let raw = ffi_dispatch!(
+            let fcset = ffi_dispatch!(
                 LIB,
                 FcFontSort,
-                ptr::null_mut(),
-                pat.pat,
+                config.as_mut_ptr(),
+                pat.as_mut_ptr(),
                 if trim { FcTrue } else { FcFalse }, // Trim font list.
                 &mut charsets,
                 &mut res
             );
-            if res == sys::FcResultMatch {
-                Some(FontSet::from_raw(self.fc, raw))
-            } else {
+            res.opt()?;
+            Some(FontSet {
+                fcset: NonNull::new(fcset).unwrap(),
+            })
+        }
+    }
+
+    /// Prepare pattern for loading font file.
+    ///
+    /// Creates a new pattern consisting of elements of font not appearing in pat,
+    /// elements of pat not appearing in font and the best matching value from pat for elements appearing in both.
+    /// The result is passed to FcConfigSubstituteWithPat with kind FcMatchFont and then returned.
+    #[doc(alias = "FcFontRenderPrepare")]
+    pub fn render_prepare(&self, font: &Self) -> Self {
+        let pat = unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcFontRenderPrepare,
+                ptr::null_mut(),
+                self.pat.as_ptr(),
+                font.pat.as_ptr()
+            )
+        };
+        Pattern {
+            pat: NonNull::new(pat).unwrap(),
+        }
+    }
+
+    /// Get character map
+    #[doc(alias = "FcPatternGetCharSet")]
+    pub fn charset(&self) -> Option<CharSet> {
+        unsafe {
+            let mut charsets = ffi_dispatch!(LIB, FcCharSetCreate,);
+            ffi_dispatch!(
+                LIB,
+                FcPatternGetCharSet,
+                self.pat.as_ptr(),
+                FC_CHARSET.as_ptr(),
+                0,
+                &mut charsets
+            );
+            if charsets.is_null() {
                 None
+            } else {
+                let charsets = ffi_dispatch!(LIB, FcCharSetCopy, charsets);
+                NonNull::new(charsets).map(|fcset| CharSet {
+                    fcset,
+                    _marker: PhantomData,
+                })
             }
         }
     }
 
     /// Get the "fullname" (human-readable name) of this pattern.
     pub fn name(&self) -> Option<&str> {
-        self.get_string(FC_FULLNAME.as_cstr())
+        self.string(FC_FULLNAME.as_cstr())
     }
 
     /// Get the "file" (path on the filesystem) of this font pattern.
     pub fn filename(&self) -> Option<&str> {
-        self.get_string(FC_FILE.as_cstr())
+        self.string(FC_FILE.as_cstr())
     }
 
     /// Get the "index" (The index of the font within the file) of this pattern.
     pub fn face_index(&self) -> Option<i32> {
-        self.get_int(FC_INDEX.as_cstr())
+        self.int(FC_INDEX.as_cstr())
     }
 
     /// Get the "slant" (Italic, oblique or roman) of this pattern.
     pub fn slant(&self) -> Option<i32> {
-        self.get_int(FC_SLANT.as_cstr())
+        self.int(FC_SLANT.as_cstr())
     }
 
     /// Get the "weight" (Light, medium, demibold, bold or black) of this pattern.
     pub fn weight(&self) -> Option<i32> {
-        self.get_int(FC_WEIGHT.as_cstr())
+        self.int(FC_WEIGHT.as_cstr())
     }
 
     /// Get the "width" (Condensed, normal or expanded) of this pattern.
     pub fn width(&self) -> Option<i32> {
-        self.get_int(FC_WIDTH.as_cstr())
+        self.int(FC_WIDTH.as_cstr())
     }
 
     /// Get the "fontformat" ("TrueType" "Type 1" "BDF" "PCF" "Type 42" "CID Type 1" "CFF" "PFR" "Windows FNT") of this pattern.
-    pub fn format(&self) -> Result<FontFormat, UnknownFontFormat> {
-        self.get_string(FC_FONTFORMAT.as_cstr())
-            .ok_or_else(|| UnknownFontFormat(String::new()))
+    pub fn format(&self) -> Result<FontFormat> {
+        self.string(FC_FONTFORMAT.as_cstr())
+            .ok_or_else(|| Error::UnknownFontFormat(String::new()))
             .and_then(|format| format.parse())
     }
 
     /// Returns a raw pointer to underlying `FcPattern`.
     pub fn as_ptr(&self) -> *const FcPattern {
-        self.pat
+        self.pat.as_ptr()
     }
 
     /// Returns an unsafe mutable pointer to the underlying `FcPattern`.
     pub fn as_mut_ptr(&mut self) -> *mut FcPattern {
-        self.pat
+        self.pat.as_ptr()
     }
 }
 
-impl<'fc> std::fmt::Debug for Pattern<'fc> {
+impl FromStr for Pattern {
+    type Err = Error;
+    /// Converts `name` from the standard text format described above into a pattern.
+    fn from_str(s: &str) -> Result<Self> {
+        let c_str = CString::new(s).unwrap();
+        unsafe {
+            let pat = ffi_dispatch!(LIB, FcNameParse, c_str.as_ptr().cast());
+            if let Some(pat) = NonNull::new(pat) {
+                Ok(Pattern { pat })
+            } else {
+                Err(Error::OutOfMemory)
+            }
+        }
+    }
+}
+
+impl std::fmt::Debug for Pattern {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let fcstr = unsafe { ffi_dispatch!(LIB, FcNameUnparse, self.pat) };
+        let fcstr = unsafe { ffi_dispatch!(LIB, FcNameUnparse, self.pat.as_ptr()) };
         let fcstr = unsafe { CStr::from_ptr(fcstr as *const c_char) };
         let result = write!(f, "{:?}", fcstr);
         unsafe { ffi_dispatch!(LIB, FcStrFree, fcstr.as_ptr() as *mut u8) };
@@ -376,45 +596,56 @@ impl<'fc> std::fmt::Debug for Pattern<'fc> {
     }
 }
 
-impl<'fc> Clone for Pattern<'fc> {
+impl Clone for Pattern {
     fn clone(&self) -> Self {
-        let clone = unsafe { ffi_dispatch!(LIB, FcPatternDuplicate, self.pat) };
+        let cloned = unsafe { ffi_dispatch!(LIB, FcPatternDuplicate, self.pat.as_ptr()) };
         Pattern {
-            pat: clone,
-            fc: self.fc,
+            pat: NonNull::new(cloned).unwrap(),
         }
     }
 }
 
-impl<'fc> Drop for Pattern<'fc> {
+impl Drop for Pattern {
     fn drop(&mut self) {
         unsafe {
-            ffi_dispatch!(LIB, FcPatternDestroy, self.pat);
+            ffi_dispatch!(LIB, FcPatternDestroy, self.pat.as_ptr());
         }
     }
 }
 
-impl Pattern<'_> {
+impl Pattern {
     /// Get the languages set of this pattern.
-    pub fn lang_set(&self) -> Option<StrList<'_>> {
+    pub fn lang_set(&mut self) -> Option<LangSet> {
+        let mut langset = LangSet::new();
         unsafe {
-            let mut ret: *mut sys::FcLangSet = ptr::null_mut();
-            if ffi_dispatch!(
+            ffi_dispatch!(
                 LIB,
                 FcPatternGetLangSet,
-                self.pat,
+                self.as_mut_ptr(),
                 FC_LANG.as_ptr(),
                 0,
-                &mut ret as *mut _
-            ) == sys::FcResultMatch
-            {
-                let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
-                let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
-                Some(StrList::from_raw(self.fc, lang_strs))
-            } else {
-                None
-            }
+                &mut langset.as_mut_ptr()
+            )
+            .opt()?;
         }
+        Some(langset)
+    }
+
+    /// Get the matrix from this pattern.
+    pub fn matrix(&mut self) -> Option<Matrix> {
+        let mut matrix = Matrix::new();
+        unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcPatternGetMatrix,
+                self.as_mut_ptr(),
+                FC_MATRIX.as_ptr(),
+                0,
+                &mut matrix.as_mut_ptr()
+            )
+            .opt()?;
+        }
+        Some(matrix)
     }
 }
 
@@ -436,22 +667,29 @@ impl Pattern<'_> {
 ///     .collect();
 /// ```
 pub struct StrList<'a> {
-    list: *mut sys::FcStrList,
-    _life: PhantomData<&'a sys::FcStrList>,
+    list: NonNull<sys::FcStrList>,
+    _maker: PhantomData<&'a sys::FcStrList>,
 }
 
 impl<'a> StrList<'a> {
-    unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrSet) -> Self {
-        Self {
-            list: raw_list,
-            _life: PhantomData,
-        }
+    // unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrSet) -> Self {
+    //     Self {
+    //         list: raw_list,
+    //         _life: PhantomData,
+    //     }
+    // }
+    fn as_mut_ptr(&mut self) -> *mut sys::FcStrList {
+        self.list.as_ptr()
+    }
+
+    fn as_ptr(&self) -> *const sys::FcStrList {
+        self.list.as_ptr()
     }
 }
 
 impl<'a> Drop for StrList<'a> {
     fn drop(&mut self) {
-        unsafe { ffi_dispatch!(LIB, FcStrListDone, self.list) };
+        unsafe { ffi_dispatch!(LIB, FcStrListDone, self.as_mut_ptr()) };
     }
 }
 
@@ -459,7 +697,8 @@ impl<'a> Iterator for StrList<'a> {
     type Item = &'a str;
 
     fn next(&mut self) -> Option<&'a str> {
-        let lang_str: *mut sys::FcChar8 = unsafe { ffi_dispatch!(LIB, FcStrListNext, self.list) };
+        let lang_str: *mut sys::FcChar8 =
+            unsafe { ffi_dispatch!(LIB, FcStrListNext, self.as_mut_ptr()) };
         if lang_str.is_null() {
             None
         } else {
@@ -471,80 +710,41 @@ impl<'a> Iterator for StrList<'a> {
     }
 }
 
-/// Wrapper around `FcFontSet`.
-pub struct FontSet<'fc> {
-    fcset: *mut sys::FcFontSet,
-    fc: &'fc Fontconfig,
-}
-
-impl<'fc> FontSet<'fc> {
-    /// Create a new, empty `FontSet`.
-    pub fn new(fc: &Fontconfig) -> FontSet {
-        let fcset = unsafe { ffi_dispatch!(LIB, FcFontSetCreate,) };
-        FontSet { fcset, fc }
-    }
-
-    /// Wrap an existing `FcFontSet`.
-    ///
-    /// The returned wrapper assumes ownership of the `FcFontSet`.
-    ///
-    /// **Safety:** The font set pointer must be valid/non-null.
-    pub unsafe fn from_raw(fc: &Fontconfig, raw_set: *mut sys::FcFontSet) -> FontSet {
-        FontSet { fcset: raw_set, fc }
-    }
-
-    /// Add a `Pattern` to this `FontSet`.
-    pub fn add_pattern(&mut self, pat: Pattern) {
-        unsafe {
-            ffi_dispatch!(LIB, FcFontSetAdd, self.fcset, pat.pat);
-            mem::forget(pat);
-        }
-    }
-
-    /// Print this `FontSet` to stdout.
-    pub fn print(&self) {
-        unsafe { ffi_dispatch!(LIB, FcFontSetPrint, self.fcset) };
-    }
-
-    /// Iterate the fonts (as `Patterns`) in this `FontSet`.
-    pub fn iter(&self) -> impl Iterator<Item = Pattern<'_>> {
-        let patterns = unsafe {
-            let fontset = self.fcset;
-            std::slice::from_raw_parts((*fontset).fonts, (*fontset).nfont as usize)
-        };
-        patterns
-            .iter()
-            .map(move |&pat| unsafe { Pattern::from_pattern(self.fc, pat) })
-    }
-}
-
-impl<'fc> Drop for FontSet<'fc> {
-    fn drop(&mut self) {
-        unsafe { ffi_dispatch!(LIB, FcFontSetDestroy, self.fcset) }
-    }
-}
-
 /// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
-pub fn list_fonts<'fc>(pattern: &Pattern<'fc>, objects: Option<&ObjectSet>) -> FontSet<'fc> {
-    let os = objects.map(|o| o.fcset).unwrap_or(ptr::null_mut());
-    unsafe {
-        let raw_set = ffi_dispatch!(LIB, FcFontList, ptr::null_mut(), pattern.pat, os);
-        FontSet::from_raw(pattern.fc, raw_set)
+pub fn list_fonts(
+    config: &mut FontConfig,
+    mut pattern: Pattern,
+    objects: Option<&mut ObjectSet>,
+) -> FontSet {
+    let os = objects.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
+    let set = unsafe {
+        ffi_dispatch!(
+            LIB,
+            FcFontList,
+            config.as_mut_ptr(),
+            pattern.as_mut_ptr(),
+            os
+        )
+    };
+    mem::forget(pattern);
+    FontSet {
+        fcset: NonNull::new(set).unwrap(),
     }
 }
 
 /// Wrapper around `FcObjectSet`.
 pub struct ObjectSet {
-    fcset: *mut sys::FcObjectSet,
+    fcset: NonNull<sys::FcObjectSet>,
 }
 
 impl ObjectSet {
     /// Create a new, empty `ObjectSet`.
-    pub fn new(_: &Fontconfig) -> ObjectSet {
+    pub fn new() -> ObjectSet {
         let fcset = unsafe { ffi_dispatch!(LIB, FcObjectSetCreate,) };
-        assert!(!fcset.is_null());
 
-        ObjectSet { fcset }
+        ObjectSet {
+            fcset: NonNull::new(fcset).unwrap(),
+        }
     }
 
     /// Wrap an existing `FcObjectSet`.
@@ -552,27 +752,35 @@ impl ObjectSet {
     /// The `FcObjectSet` must not be null. This method assumes ownership of the `FcObjectSet`.
     ///
     /// **Safety:** The object set pointer must be valid/non-null.
-    pub unsafe fn from_raw(_: &Fontconfig, raw_set: *mut sys::FcObjectSet) -> ObjectSet {
-        ObjectSet { fcset: raw_set }
-    }
+    // pub unsafe fn from_raw(_: &Fontconfig, raw_set: *mut sys::FcObjectSet) -> ObjectSet {
+    //     // ObjectSet { fcset: raw_set }
+    // }
 
     /// Add a string to the `ObjectSet`.
     pub fn add(&mut self, name: &CStr) {
-        let res = unsafe { ffi_dispatch!(LIB, FcObjectSetAdd, self.fcset, name.as_ptr()) };
+        let res = unsafe { ffi_dispatch!(LIB, FcObjectSetAdd, self.as_mut_ptr(), name.as_ptr()) };
         assert_eq!(res, FcTrue);
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut sys::FcObjectSet {
+        self.fcset.as_ptr()
+    }
+
+    fn as_ptr(&self) -> *const sys::FcObjectSet {
+        self.fcset.as_ptr()
     }
 }
 
 impl Drop for ObjectSet {
     fn drop(&mut self) {
-        unsafe { ffi_dispatch!(LIB, FcObjectSetDestroy, self.fcset) }
+        unsafe { ffi_dispatch!(LIB, FcObjectSetDestroy, self.as_mut_ptr()) }
     }
 }
 
 impl FromStr for FontFormat {
-    type Err = UnknownFontFormat;
+    type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "TrueType" => Ok(FontFormat::TrueType),
             "Type 1" => Ok(FontFormat::Type1),
@@ -583,52 +791,33 @@ impl FromStr for FontFormat {
             "CFF" => Ok(FontFormat::CFF),
             "PFR" => Ok(FontFormat::PFR),
             "Windows FNT" => Ok(FontFormat::WindowsFNT),
-            _ => Err(UnknownFontFormat(s.to_string())),
+            _ => Err(Error::UnknownFontFormat(s.to_string())),
         }
     }
 }
 
 /// Wrapper around `FcCharSet`.
-pub struct CharSet<'fc> {
-    fcset: *mut sys::FcCharSet,
-    fc: &'fc Fontconfig,
+pub struct CharSet<'a> {
+    fcset: NonNull<sys::FcCharSet>,
+    _marker: PhantomData<&'a sys::FcCharSet>,
 }
 
-impl<'fc> CharSet<'fc> {
-    /// Create a new, empty `CharSet`.
-    pub fn new(fc: &Fontconfig) -> CharSet {
-        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCreate,) };
-        assert!(!fcset.is_null(), "Can't create CharSet");
-        CharSet { fcset, fc }
-    }
-
+impl<'a> CharSet<'a> {
     /// Count entries in a charset
     pub fn len(&self) -> usize {
-        let size = unsafe { ffi_dispatch!(LIB, FcCharSetCount, self.fcset) };
+        let size = unsafe { ffi_dispatch!(LIB, FcCharSetCount, self.as_ptr()) };
         size as usize
-    }
-
-    /// Add a character to the `CharSet`.
-    pub fn add_char(&mut self, c: char) {
-        let res = unsafe { ffi_dispatch!(LIB, FcCharSetAddChar, self.fcset, c as u32) };
-        assert_eq!(res, FcTrue);
-    }
-
-    /// Delete a character from the `CharSet
-    pub fn del_char(&mut self, c: char) {
-        let res = unsafe { ffi_dispatch!(LIB, FcCharSetDelChar, self.fcset, c as u32) };
-        assert_eq!(res, FcTrue);
     }
 
     /// Check if a character is in the `CharSet`.
     pub fn has_char(&self, c: char) -> bool {
-        let res = unsafe { ffi_dispatch!(LIB, FcCharSetHasChar, self.fcset, c as u32) };
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetHasChar, self.as_ptr(), c as u32) };
         res == FcTrue
     }
 
     /// Check if self is a subset of other `CharSet`.
     pub fn is_subset(&self, other: &Self) -> bool {
-        let res = unsafe { ffi_dispatch!(LIB, FcCharSetIsSubset, self.fcset, other.fcset) };
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetIsSubset, self.as_ptr(), other.as_ptr()) };
         res == FcTrue
     }
 
@@ -638,8 +827,8 @@ impl<'fc> CharSet<'fc> {
             ffi_dispatch!(
                 LIB,
                 FcCharSetMerge,
-                self.fcset,
-                other.fcset,
+                self.as_mut_ptr(),
+                other.as_ptr(),
                 ptr::null_mut()
             )
         };
@@ -647,45 +836,91 @@ impl<'fc> CharSet<'fc> {
     }
 
     /// Intersect self with other `CharSet`.
-    pub fn intersect(&mut self, other: &Self) -> Self {
-        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetIntersect, self.fcset, other.fcset) };
-        assert!(!fcset.is_null(), "intersect failed");
-        Self { fc: self.fc, fcset }
+    pub fn intersect(&self, other: &Self) -> Self {
+        let fcset =
+            unsafe { ffi_dispatch!(LIB, FcCharSetIntersect, self.as_ptr(), other.as_ptr()) };
+        Self {
+            fcset: NonNull::new(fcset).expect("intersect failed"),
+            _marker: PhantomData,
+        }
     }
 
     /// Subtract other `CharSet` from self.
-    pub fn subtract(&mut self, other: &Self) -> Self {
-        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetSubtract, self.fcset, other.fcset) };
-        assert!(!fcset.is_null(), "subtract failed");
-        Self { fc: self.fc, fcset }
+    pub fn subtract(&self, other: &Self) -> Self {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetSubtract, self.as_ptr(), other.as_ptr()) };
+        Self {
+            fcset: NonNull::new(fcset).expect("subtract failed"),
+            _marker: PhantomData,
+        }
     }
 
     /// Union self with other `CharSet`.
-    pub fn union(&mut self, other: &Self) -> Self {
-        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetUnion, self.fcset, other.fcset) };
-        assert!(!fcset.is_null(), "union failed");
-        Self { fc: self.fc, fcset }
+    pub fn union(&self, other: &Self) -> Self {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetUnion, self.as_ptr(), other.as_ptr()) };
+        Self {
+            fcset: NonNull::new(fcset).expect("union failed"),
+            _marker: PhantomData,
+        }
+    }
+
+    fn as_ptr(&self) -> *const sys::FcCharSet {
+        self.fcset.as_ptr()
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut sys::FcCharSet {
+        self.fcset.as_ptr()
     }
 }
 
-impl<'fc> PartialEq for CharSet<'fc> {
+impl CharSet<'static> {
+    /// Create a new, empty `CharSet`.
+    pub fn new() -> CharSet<'static> {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCreate,) };
+        CharSet {
+            fcset: NonNull::new(fcset).unwrap(),
+            _marker: PhantomData,
+        }
+    }
+    /// Add a character to the `CharSet`.
+    pub fn add_char(&mut self, c: char) {
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetAddChar, self.as_mut_ptr(), c as u32) };
+        assert_eq!(res, FcTrue);
+    }
+
+    /// Delete a character from the `CharSet
+    pub fn del_char(&mut self, c: char) {
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetDelChar, self.as_mut_ptr(), c as u32) };
+        assert_eq!(res, FcTrue);
+    }
+}
+
+impl<'a> PartialEq for CharSet<'a> {
     fn eq(&self, other: &Self) -> bool {
-        let res = unsafe { ffi_dispatch!(LIB, FcCharSetEqual, self.fcset, other.fcset) };
+        let res = unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcCharSetEqual,
+                self.fcset.as_ptr(),
+                other.fcset.as_ptr()
+            )
+        };
         res == FcTrue
     }
 }
 
-impl<'fc> Clone for CharSet<'fc> {
-    fn clone(&self) -> Self {
-        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCopy, self.fcset) };
-        assert!(!fcset.is_null(), "Can't clone CharSet");
-        CharSet { fcset, fc: self.fc }
+impl<'a> Clone for CharSet<'a> {
+    fn clone(&self) -> CharSet<'a> {
+        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCopy, self.fcset.as_ptr()) };
+        CharSet {
+            fcset: NonNull::new(fcset).expect("Can't clone CharSet"),
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<'fc> Drop for CharSet<'fc> {
+impl Drop for CharSet<'_> {
     fn drop(&mut self) {
-        unsafe { ffi_dispatch!(LIB, FcCharSetDestroy, self.fcset) };
+        unsafe { ffi_dispatch!(LIB, FcCharSetDestroy, self.as_mut_ptr()) };
     }
 }
 
@@ -695,22 +930,24 @@ mod tests {
 
     #[test]
     fn it_works() {
-        assert!(Fontconfig::new().is_some())
+        FontConfig::current();
+        assert!(FontConfig::new().is_some());
     }
 
     #[test]
     fn test_find_font() {
-        let fc = Fontconfig::new().unwrap();
-        fc.find("dejavu sans", None).unwrap().print_debug();
-        fc.find("dejavu sans", Some("oblique"))
+        let mut config = FontConfig::current();
+        config.find("dejavu sans", None).unwrap().print_debug();
+        config
+            .find("dejavu sans", Some("oblique"))
             .unwrap()
             .print_debug();
     }
 
     #[test]
     fn test_iter_and_print() {
-        let fc = Fontconfig::new().unwrap();
-        let fontset = list_fonts(&Pattern::new(&fc), None);
+        let mut config = FontConfig::current();
+        let fontset = list_fonts(&mut config, Pattern::new(), None);
         for pattern in fontset.iter() {
             println!("{:?}", pattern.name());
         }
@@ -720,31 +957,42 @@ mod tests {
     }
 
     #[test]
-    fn iter_lang_set() {
-        let fc = Fontconfig::new().unwrap();
-        let mut pat = Pattern::new(&fc);
+    fn test_iter_lang_set() {
+        let mut config = FontConfig::current();
+        let mut pat = Pattern::new();
         let family = CString::new("dejavu sans").unwrap();
         pat.add_string(FC_FAMILY.as_cstr(), &family);
-        let pattern = pat.font_match();
-        for lang in pattern.lang_set().unwrap() {
+        let mut pattern = pat.font_match(&mut config);
+        for lang in pattern.lang_set().unwrap().langs().iter() {
             println!("{:?}", lang);
         }
 
         // Test find
-        assert!(pattern.lang_set().unwrap().any(|lang| lang == "za"));
+        assert!(pattern
+            .lang_set()
+            .unwrap()
+            .langs()
+            .iter()
+            .any(|lang| lang == "za"));
 
         // Test collect
-        let langs = pattern.lang_set().unwrap().collect::<Vec<_>>();
-        assert!(langs.iter().any(|&l| l == "ie"));
+        let langs = pattern
+            .lang_set()
+            .unwrap()
+            .langs()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        assert!(langs.iter().any(|l| l == "ie"));
     }
 
     #[test]
-    fn iter_font_sort() {
-        let fc = Fontconfig::new().unwrap();
-        let mut pat = Pattern::new(&fc);
+    fn test_iter_font_sort() {
+        let mut config = FontConfig::current();
+        let mut pat = Pattern::new();
         let family = CString::new("dejavu sans").unwrap();
         pat.add_string(FC_FAMILY.as_cstr(), &family);
-        let font_set = pat.font_sort(false).unwrap();
+        let font_set = pat.font_sort(&mut config, false).unwrap();
 
         for font in font_set.iter() {
             println!("{:?}", font.name());

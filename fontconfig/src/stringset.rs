@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn list_fonts_of_ja() {
         let mut config = FontConfig::default();
-        let mut fonts = config.list_fonts(Pattern::new(), None);
+        let mut fonts = config.font_list(Pattern::new(), None);
         let ja_fonts = fonts.iter_mut().filter_map(|mut p: Pattern| {
             let langset = p.lang_set()?;
             // .map_or(false, |mut langs| langs.langs().iter().any(|l| l == "ja"))

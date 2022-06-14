@@ -3,6 +3,7 @@
 use std::ffi::CStr;
 use std::fmt;
 use std::ops::Deref;
+use std::ptr::NonNull;
 
 use fontconfig_sys as sys;
 
@@ -15,19 +16,19 @@ use sys::ffi_dispatch;
 
 /// C String
 #[repr(transparent)]
-pub struct FcStr(*mut sys::FcChar8);
+pub struct FcStr(NonNull<sys::FcChar8>);
 
 /// Represented with the FcChar8 type with ownership.
 impl FcStr {
     #[doc(hidden)]
-    pub unsafe fn from_ptr(ptr: *mut sys::FcChar8) -> Self {
-        FcStr(ptr)
+    pub unsafe fn from_ptr(ptr: *mut sys::FcChar8) -> Option<Self> {
+        NonNull::new(ptr).map(|ptr| FcStr(ptr))
     }
 }
 
 impl Drop for FcStr {
     fn drop(&mut self) {
-        unsafe { ffi_dispatch!(LIB, FcStrFree, self.0) }
+        unsafe { ffi_dispatch!(LIB, FcStrFree, self.0.as_ptr()) }
     }
 }
 
@@ -35,7 +36,7 @@ impl Deref for FcStr {
     type Target = CStr;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { CStr::from_ptr(self.0 as *const i8) }
+        unsafe { CStr::from_ptr(self.0.as_ptr() as *const i8) }
     }
 }
 

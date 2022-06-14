@@ -1,6 +1,7 @@
 //!
 
 use std::ffi::CStr;
+use std::iter::FromIterator;
 use std::ptr::NonNull;
 
 use fontconfig_sys as sys;
@@ -43,6 +44,19 @@ impl ObjectSet {
         assert_eq!(res, FcTrue);
     }
 
+    /// Build object set from args
+    // pub fn build<A, I, S>(args: A) -> ObjectSet
+    // where
+    //     I: Iterator<Item = S>,
+    //     S: AsRef<CStr>,
+    pub fn build(args: &[&'_ CStr]) -> ObjectSet {
+        let mut set = ObjectSet::new();
+        for arg in args {
+            set.add(arg);
+        }
+        set
+    }
+
     pub(crate) fn as_mut_ptr(&mut self) -> *mut sys::FcObjectSet {
         self.fcset.as_ptr()
     }
@@ -56,6 +70,19 @@ impl ObjectSet {
 impl Default for ObjectSet {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<'a> FromIterator<&'a CStr> for ObjectSet {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = &'a CStr>,
+    {
+        let mut set = Self::new();
+        for name in iter {
+            set.add(name);
+        }
+        set
     }
 }
 

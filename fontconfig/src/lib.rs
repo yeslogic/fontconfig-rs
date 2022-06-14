@@ -52,7 +52,7 @@ use sys::statics::{LIB, LIB_RESULT};
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
-use std::ffi::{CString};
+use std::ffi::CString;
 use std::mem;
 
 use std::path::PathBuf;
@@ -302,7 +302,8 @@ impl FontConfig {
     }
 
     /// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
-    pub fn list_fonts(&mut self, mut pattern: Pattern, objects: Option<&mut ObjectSet>) -> FontSet {
+    #[doc(alias = "FcFontList")]
+    pub fn font_list(&mut self, mut pattern: Pattern, objects: Option<&mut ObjectSet>) -> FontSet {
         let os = objects.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
         let set =
             unsafe { ffi_dispatch!(LIB, FcFontList, self.as_mut_ptr(), pattern.as_mut_ptr(), os) };
@@ -394,7 +395,6 @@ mod tests {
     #[test]
     fn it_works() {
         FontConfig::default();
-        // assert!(FontConfig::new().is_some());
     }
 
     #[test]
@@ -410,7 +410,7 @@ mod tests {
     #[test]
     fn iter_and_print() {
         let mut config = FontConfig::default();
-        let fontset = config.list_fonts(Pattern::new(), None);
+        let fontset = config.font_list(Pattern::new(), None);
         for pattern in fontset.iter() {
             println!("{:?}", pattern.name());
         }

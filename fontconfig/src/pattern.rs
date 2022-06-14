@@ -136,7 +136,7 @@ impl Pattern {
     /// Format a pattern into a string according to a format specifier
     ///
     /// See [pattern-format](https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcpatternformat.html)
-    pub fn format(&self, fmt: &CStr) -> FcStr {
+    pub fn format(&self, fmt: &CStr) -> Option<FcStr> {
         unsafe {
             let s = ffi_dispatch!(
                 LIB,

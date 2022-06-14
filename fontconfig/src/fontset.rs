@@ -40,6 +40,16 @@ impl FontSet {
         mem::forget(pat);
     }
 
+    /// How many fonts are in this `FontSet`
+    pub fn len(&self) -> usize {
+        unsafe { (*self.as_ptr()).nfont as _ }
+    }
+
+    /// If there are no fonts in this `FontSet`, return `true`.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Print this `FontSet` to stdout.
     pub fn print(&mut self) {
         unsafe { ffi_dispatch!(LIB, FcFontSetPrint, self.as_mut_ptr()) };

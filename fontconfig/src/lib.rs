@@ -79,6 +79,10 @@ pub use fontset::FontSet;
 pub mod stringset;
 pub use stringset::StringSet;
 
+///
+pub mod strings;
+pub use strings::FcStr;
+
 mod matrix;
 pub use matrix::Matrix;
 
@@ -239,8 +243,8 @@ impl FontConfig {
     /// If config is NULL, the current configuration is used.
     /// Returns NULL if an error occurs during this process.
     pub fn match_(&mut self, sets: &mut [FontSet], pat: &mut Pattern) -> Pattern {
-        pat.default_substitute();
-        self.substitute(pat, MatchKind::Font);
+        // pat.default_substitute();
+        // self.substitute(pat, MatchKind::Font);
         let mut result = sys::FcResultNoMatch;
         let pat = unsafe {
             ffi_dispatch!(
@@ -330,7 +334,7 @@ impl Default for FontConfig {
 impl Drop for FontConfig {
     fn drop(&mut self) {
         let guard = INITIALIZED.lock().unwrap();
-        if guard.checked_sub(1).unwrap() == 0 {
+        if guard.checked_sub(1).unwrap_or_default() == 0 {
             unsafe { ffi_dispatch!(LIB, FcFini,) };
         }
     }
@@ -408,6 +412,11 @@ impl Pattern {
         }
     }
 
+    /// Delete a property from a pattern
+    pub fn del(&mut self, name: &CStr) -> bool {
+        FcTrue == unsafe { ffi_dispatch!(LIB, FcPatternDel, self.as_mut_ptr(), name.as_ptr()) }
+    }
+
     /// Get string the value for a key from this pattern.
     pub fn string<'a>(&'a self, name: &'a CStr) -> Option<&'a str> {
         unsafe {
@@ -450,7 +459,45 @@ impl Pattern {
         }
     }
 
-    fn default_substitute(&mut self) {
+    /// Filter the objects of pattern
+    ///
+    /// Returns a new pattern that only has those objects from p that are in os.
+    /// If os is None, a duplicate of p is returned.
+    pub fn filter(&self, os: Option<&mut ObjectSet>) -> Option<Self> {
+        let os = os.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
+        let pat = unsafe {
+            let pat = ffi_dispatch!(LIB, FcPatternFilter, self.pat.as_ptr(), os);
+            if pat.is_null() {
+                return None;
+            }
+            pat
+        };
+        NonNull::new(pat).map(|pat| Pattern { pat })
+    }
+
+    /// Format a pattern into a string according to a format specifier
+    ///
+    /// See [pattern-format](https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcpatternformat.html)
+    pub fn format(&self, fmt: &CStr) -> FcStr {
+        unsafe {
+            let s = ffi_dispatch!(
+                LIB,
+                FcPatternFormat,
+                self.pat.as_ptr(),
+                fmt.as_ptr() as *const u8
+            );
+            FcStr::from_ptr(s)
+        }
+    }
+
+    /// Perform default substitutions in a pattern
+    ///
+    /// Supplies default values for underspecified font patterns:
+    ///
+    /// * Patterns without a specified style or weight are set to Medium
+    /// * Patterns without a specified style or slant are set to Roman
+    /// * Patterns without a specified pixel size are given one computed from any specified point size (default 12), dpi (default 75) and scale (default 1).
+    pub fn default_substitute(&mut self) {
         unsafe {
             ffi_dispatch!(LIB, FcDefaultSubstitute, self.pat.as_mut());
         }
@@ -458,8 +505,8 @@ impl Pattern {
 
     /// Get the best available match for this pattern, returned as a new pattern.
     pub fn font_match(&mut self, config: &mut FontConfig) -> Pattern {
-        self.default_substitute();
-        config.substitute(self, MatchKind::Pattern);
+        // self.default_substitute();
+        // config.substitute(self, MatchKind::Pattern);
 
         unsafe {
             let mut res = sys::FcResultNoMatch;
@@ -480,8 +527,8 @@ impl Pattern {
     /// Get the list of fonts sorted by closeness to self.
     /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
     pub fn font_sort(&mut self, config: &mut FontConfig, trim: bool) -> Option<FontSet> {
-        self.default_substitute();
-        config.substitute(self, MatchKind::Pattern);
+        // self.default_substitute();
+        // config.substitute(self, MatchKind::Pattern);
         let mut pat = self.clone();
         unsafe {
             // What is this result actually used for? Seems redundant with
@@ -583,7 +630,7 @@ impl Pattern {
     }
 
     /// Get the "fontformat" ("TrueType" "Type 1" "BDF" "PCF" "Type 42" "CID Type 1" "CFF" "PFR" "Windows FNT") of this pattern.
-    pub fn format(&self) -> Result<FontFormat> {
+    pub fn fontformat(&self) -> Result<FontFormat> {
         self.string(FC_FONTFORMAT.as_cstr())
             .ok_or_else(|| Error::UnknownFontFormat(String::new()))
             .and_then(|format| format.parse())
@@ -872,6 +919,11 @@ impl Drop for CharSet<'_> {
     fn drop(&mut self) {
         unsafe { ffi_dispatch!(LIB, FcCharSetDestroy, self.as_mut_ptr()) };
     }
+}
+
+/// Returns the version number of the library.
+pub fn version() -> i32 {
+    unsafe { ffi_dispatch!(LIB, FcGetVersion,) }
 }
 
 #[cfg(test)]

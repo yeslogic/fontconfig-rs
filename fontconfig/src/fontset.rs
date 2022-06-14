@@ -28,14 +28,15 @@ impl FontSet {
     }
 
     /// Add a `Pattern` to this `FontSet`.
+    #[doc(alias = "FcFontSetAdd")]
     pub fn push(&mut self, mut pat: Pattern) {
         unsafe {
             assert_eq!(
                 ffi_dispatch!(LIB, FcFontSetAdd, self.as_mut_ptr(), pat.as_mut_ptr()),
                 FcTrue,
             );
-            mem::forget(pat);
         }
+        mem::forget(pat);
     }
 
     /// Print this `FontSet` to stdout.

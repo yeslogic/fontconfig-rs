@@ -220,15 +220,16 @@ impl FontConfig {
     /// Returns false if the substitution cannot be performed (due to allocation failure).
     /// Otherwise returns true.
     pub fn substitute(&mut self, pat: &mut Pattern, kind: MatchKind) {
-        unsafe {
+        let ret = unsafe {
             ffi_dispatch!(
                 LIB,
                 FcConfigSubstitute,
                 self.as_mut_ptr(),
                 pat.as_mut_ptr(),
                 kind.into()
-            );
-        }
+            )
+        };
+        assert_eq!(ret, FcTrue);
     }
 
     /// Return the best font from a set of font sets
@@ -616,19 +617,21 @@ impl Drop for Pattern {
 impl Pattern {
     /// Get the languages set of this pattern.
     pub fn lang_set(&mut self) -> Option<LangSet> {
-        let mut langset = LangSet::new();
-        unsafe {
+        // let mut langset = LangSet::new();
+        let langset = unsafe {
+            let mut langset = ffi_dispatch!(LIB, FcLangSetCreate,);
             ffi_dispatch!(
                 LIB,
                 FcPatternGetLangSet,
                 self.as_mut_ptr(),
                 FC_LANG.as_ptr(),
                 0,
-                &mut langset.as_mut_ptr()
+                &mut langset
             )
             .opt()?;
-        }
-        Some(langset)
+            ffi_dispatch!(LIB, FcLangSetCopy, langset)
+        };
+        NonNull::new(langset).map(|langset| LangSet { langset })
     }
 
     /// Get the matrix from this pattern.
@@ -935,7 +938,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_font() {
+    fn find_font() {
         let mut config = FontConfig::current();
         config.find("dejavu sans", None).unwrap().print_debug();
         config
@@ -945,7 +948,7 @@ mod tests {
     }
 
     #[test]
-    fn test_iter_and_print() {
+    fn iter_and_print() {
         let mut config = FontConfig::current();
         let fontset = list_fonts(&mut config, Pattern::new(), None);
         for pattern in fontset.iter() {
@@ -957,7 +960,7 @@ mod tests {
     }
 
     #[test]
-    fn test_iter_lang_set() {
+    fn iter_lang_set() {
         let mut config = FontConfig::current();
         let mut pat = Pattern::new();
         let family = CString::new("dejavu sans").unwrap();
@@ -987,7 +990,7 @@ mod tests {
     }
 
     #[test]
-    fn test_iter_font_sort() {
+    fn iter_font_sort() {
         let mut config = FontConfig::current();
         let mut pat = Pattern::new();
         let family = CString::new("dejavu sans").unwrap();

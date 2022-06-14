@@ -49,7 +49,7 @@ impl From<sys::FcLangResult> for LangSetCmp {
 /// If you have orthographic information for any of these languages, please submit them.
 #[doc(alias = "FcLangSet")]
 pub struct LangSet {
-    langset: NonNull<sys::FcLangSet>,
+    pub(crate) langset: NonNull<sys::FcLangSet>,
 }
 
 impl LangSet {
@@ -120,6 +120,7 @@ impl LangSet {
     /// Get the list of languages in the langset
     ///
     /// Returns a string set of all languages in langset.
+    #[doc(alias = "FcLangSetGetLangs")]
     pub fn langs(&self) -> StringSet {
         let strings = unsafe { ffi_dispatch!(LIB, FcLangSetGetLangs, self.as_ptr()) };
         StringSet {

@@ -1,4 +1,5 @@
 use std::ffi::CStr;
+use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use fontconfig_sys as sys;
@@ -19,6 +20,7 @@ pub struct StringSet {
 
 impl StringSet {
     /// Create a new, empty `StringSet`.
+    #[doc(alias = "FcStrSetCreate")]
     pub fn new() -> StringSet {
         let set = unsafe { ffi_dispatch!(LIB, FcStrSetCreate,) };
         StringSet {
@@ -48,24 +50,23 @@ impl Drop for StringSet {
 
 ///
 pub struct StringSetIter<'a> {
-    _set: &'a StringSet,
-    iter: NonNull<sys::FcStrList>,
+    handle: NonNull<sys::FcStrList>,
+    _marker: PhantomData<&'a StringSet>,
 }
 
 impl<'a> StringSetIter<'a> {
     fn new(set: &'a StringSet) -> StringSetIter<'a> {
         let iter = unsafe {
             let iter = ffi_dispatch!(LIB, FcStrListCreate, set.as_ptr() as *mut _);
-            // ffi_dispatch!(LIB, FcStrListFirst, iter);
             iter
         };
         StringSetIter {
-            _set: set,
-            iter: NonNull::new(iter).unwrap(),
+            _marker: PhantomData,
+            handle: NonNull::new(iter).unwrap(),
         }
     }
     fn as_mut_ptr(&mut self) -> *mut sys::FcStrList {
-        self.iter.as_ptr()
+        self.handle.as_ptr()
     }
 }
 
@@ -81,10 +82,12 @@ impl<'a> Iterator for StringSetIter<'a> {
         unsafe {
             let s = ffi_dispatch!(LIB, FcStrListNext, self.as_mut_ptr());
             if s.is_null() {
-                None
-            } else {
-                CStr::from_ptr(s.cast()).to_str().ok()
+                return None;
             }
+            CStr::from_ptr(s.cast())
+                .to_str()
+                .ok()
+                .or_else(|| self.next())
         }
     }
 }

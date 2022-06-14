@@ -44,7 +44,12 @@ fn main() {
     let opts = Opts::parse();
 
     if opts.version {
-        println!("fontconfig version {}", fontconfig::version());
+        let version = fontconfig::version();
+        let major = version / 10000;
+        let version = version % 10000;
+        let minor = version / 100;
+        let revision = version % 100;
+        println!("fontconfig version {}.{}.{}", major, minor, revision);
         return;
     }
 
@@ -72,7 +77,7 @@ fn main() {
 
     if opts.sort || opts.all {
         let patterns = pat
-            .font_sort(&mut config, if opts.all { false } else { true })
+            .font_sort(&mut config, !opts.all)
             .expect("No fonts installed on the system");
 
         for pattern in patterns.iter() {

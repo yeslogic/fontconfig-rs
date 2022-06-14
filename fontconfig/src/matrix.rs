@@ -1,3 +1,4 @@
+//!
 use std::ops::Mul;
 
 use fontconfig_sys as sys;
@@ -98,5 +99,11 @@ impl std::fmt::Debug for Matrix {
             .field("yx", &self.matrix.yx)
             .field("yy", &self.matrix.yy)
             .finish()
+    }
+}
+
+impl Default for Matrix {
+    fn default() -> Self {
+        Matrix::new()
     }
 }

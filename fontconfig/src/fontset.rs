@@ -1,3 +1,4 @@
+//!
 use std::mem;
 use std::ptr::NonNull;
 
@@ -10,7 +11,7 @@ use sys::statics::LIB;
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
-use crate::{FcTrue, Pattern};
+use crate::{Blanks, FcTrue, Pattern};
 
 /// Wrapper around `FcFontSet`.
 #[repr(transparent)]
@@ -45,7 +46,7 @@ impl FontSet {
     }
 
     /// Iterate the fonts (as `Patterns`) in this `FontSet`.
-    pub fn iter<'a>(&'a self) -> Iter<'a> {
+    pub fn iter(&self) -> Iter {
         Iter {
             fcset: self,
             index: 0,
@@ -53,11 +54,44 @@ impl FontSet {
     }
 
     /// Iterate the fonts (as `Patterns`) in this `FontSet`.
-    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a> {
+    pub fn iter_mut(&mut self) -> IterMut<'_> {
         IterMut {
             fcset: self,
             index: 0,
         }
+    }
+
+    /// Compute all patterns from font file (and index)
+    ///
+    /// Constructs patterns found in 'file'.
+    /// If id is -1, then all patterns found in 'file' are added to 'set'.
+    /// Otherwise, this function works exactly like FcFreeTypeQuery().
+    /// The number of faces in 'file' is returned in 'count'.
+    /// The number of patterns added to 'set' is returned.
+    /// FcBlanks is deprecated, blanks is ignored and accepted only for compatibility with older code.
+    pub fn freetype_query_all(
+        &mut self,
+        _file: &std::path::Path,
+        _index: isize,
+        _blanks: Option<&mut Blanks>,
+        _count: Option<&mut usize>,
+    ) -> usize {
+        unimplemented!()
+        // unsafe {
+        //     let blanks = blanks.map(|s| s.as_mut_ptr()).unwrap_or(std::ptr::null());
+        //     assert_eq!(
+        //         ffi_dispatch!(
+        //             LIB,
+        //             FcFreeTypeQueryAll,
+        //             file.as_ptr(),
+        //             index,
+        //             blanks,
+        //             ptr::null_mut(),
+        //             self.as_mut_ptr()
+        //         ),
+        //         FcTrue,
+        //     );
+        // }
     }
 
     fn as_mut_ptr(&mut self) -> *mut sys::FcFontSet {
@@ -66,6 +100,12 @@ impl FontSet {
 
     fn as_ptr(&self) -> *const sys::FcFontSet {
         self.fcset.as_ptr()
+    }
+}
+
+impl Default for FontSet {
+    fn default() -> FontSet {
+        FontSet::new()
     }
 }
 

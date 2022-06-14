@@ -1,3 +1,4 @@
+//!
 use std::ffi::CStr;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -91,6 +92,7 @@ impl LangSet {
     ///   this function returns FcLangDifferentTerritory.
     /// If they share no languages in common, this function returns FcLangDifferentLang.
     #[doc(alias = "FcLangSetCompare")]
+    #[allow(clippy::should_implement_trait)]
     pub fn cmp(&self, rhs: &LangSet) -> LangSetCmp {
         let cmp = unsafe { ffi_dispatch!(LIB, FcLangSetCompare, self.as_ptr(), rhs.as_ptr()) };
         cmp.into()
@@ -130,7 +132,7 @@ impl LangSet {
 
     /// Get character map for a language
     #[doc(alias = "FcLangGetCharSet")]
-    pub fn charset<'a>(lang: &'a CStr) -> CharSet<'a> {
+    pub fn charset(lang: &CStr) -> CharSet<'_> {
         let charset = unsafe { ffi_dispatch!(LIB, FcLangGetCharSet, lang.as_ptr() as *const _) };
         CharSet {
             fcset: NonNull::new(charset).unwrap(),
@@ -166,5 +168,11 @@ impl PartialEq for LangSet {
     fn eq(&self, other: &Self) -> bool {
         let is_eq = unsafe { ffi_dispatch!(LIB, FcLangSetEqual, self.as_ptr(), other.as_ptr()) };
         is_eq == FcTrue
+    }
+}
+
+impl Default for LangSet {
+    fn default() -> Self {
+        LangSet::new()
     }
 }

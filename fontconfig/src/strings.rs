@@ -1,4 +1,4 @@
-//* To help applications deal with these UTF-8 strings in a locale-insensitive manner.
+//! To help applications deal with these UTF-8 strings in a locale-insensitive manner.
 
 use std::ffi::CStr;
 use std::fmt;

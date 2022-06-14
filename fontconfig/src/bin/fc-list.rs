@@ -29,7 +29,7 @@ struct Opts {
     pattern: Option<String>,
 
     /// element ...
-    #[clap(value_name = "pattern", value_parser)]
+    #[clap(value_name = "element", value_parser)]
     elements: Vec<String>,
 }
 

@@ -26,6 +26,10 @@ required-features = ["clap"]
 name = "fc-list"
 required-features = ["clap"]
 
+[[bin]]
+name = "fc-pattern"
+required-features = ["clap"]
+
 [dependencies]
 thiserror = "1.0"
 once_cell = "1.12"

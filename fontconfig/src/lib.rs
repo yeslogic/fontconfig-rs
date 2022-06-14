@@ -22,12 +22,12 @@
 //! -----
 //!
 //! ```
-//! use fontconfig::Fontconfig;
+//! use fontconfig::FontConfig;
 //!
 //! fn main() {
-//!     let fc = Fontconfig::new().unwrap();
-//!     // `Fontconfig::find()` returns `Option` (will rarely be `None` but still could be)
-//!     let font = fc.find("freeserif", None).unwrap();
+//!     let mut config = FontConfig::default();
+//!     // `FontConfig::find()` returns `Option` (will rarely be `None` but still could be)
+//!     let font = config.find("freeserif", None).unwrap();
 //!     // `name` is a `String`, `path` is a `Path`
 //!     println!("Name: {}\nPath: {}", font.name, font.path.display());
 //! }
@@ -61,6 +61,7 @@ use std::os::raw::c_char;
 use std::path::PathBuf;
 use std::ptr::{self, NonNull};
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
 pub use sys::constants::*;
 use sys::{FcBool, FcPattern};
@@ -70,11 +71,13 @@ use thiserror::Error;
 mod langset;
 pub use langset::{LangSet, LangSetCmp};
 
-mod fontset;
-pub use fontset::{FontSet, FontSetIter};
+///
+pub mod fontset;
+pub use fontset::FontSet;
 
-mod stringset;
-pub use stringset::{StringSet, StringSetIter};
+///
+pub mod stringset;
+pub use stringset::StringSet;
 
 mod matrix;
 pub use matrix::Matrix;
@@ -86,10 +89,8 @@ const FcFalse: FcBool = 0;
 
 type Result<T> = std::result::Result<T, Error>;
 
-/// Handle obtained after Fontconfig has been initialised.
-pub struct FontConfig {
-    cfg: Option<NonNull<sys::FcConfig>>,
-}
+static INITIALIZED: once_cell::sync::Lazy<Arc<Mutex<usize>>> =
+    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(0)));
 
 /// Error type returned from Pattern::format.
 ///
@@ -181,28 +182,25 @@ pub enum FontFormat {
     WindowsFNT,
 }
 
-impl FontConfig {
-    /// Initialise Fontconfig and return a handle allowing further interaction with the API.
-    ///
-    /// If Fontconfig fails to initialise, returns `None`.
-    pub fn new() -> Option<Self> {
-        #[cfg(feature = "dlopen")]
-        if LIB_RESULT.is_err() {
-            return None;
-        }
-        let cfg = unsafe { ffi_dispatch!(LIB, FcConfigCreate,) };
-        Some(FontConfig {
-            cfg: Some(NonNull::new(cfg)?),
-        })
-    }
+/// Handle obtained after Fontconfig has been initialised.
+#[doc(alias = "FcConfig")]
+pub struct FontConfig {
+    cfg: Option<NonNull<sys::FcConfig>>,
+}
 
-    /// Returns the current default configuration.
-    pub fn current() -> Self {
-        unsafe {
-            ffi_dispatch!(LIB, FcInit,);
-        };
-        FontConfig { cfg: None }
-    }
+///
+impl FontConfig {
+    /// Create a configuration
+    // pub fn new() -> Option<Self> {
+    //     #[cfg(feature = "dlopen")]
+    //     if LIB_RESULT.is_err() {
+    //         return None;
+    //     }
+    //     let cfg = unsafe { ffi_dispatch!(LIB, FcConfigCreate,) };
+    //     Some(FontConfig {
+    //         cfg: Some(NonNull::new(cfg)?),
+    //     })
+    // }
 
     /// Set configuration as default.
     ///
@@ -261,12 +259,6 @@ impl FontConfig {
         }
     }
 
-    /// Find a font of the given `family` (e.g. Dejavu Sans, FreeSerif),
-    /// optionally filtering by `style`. Both fields are case-insensitive.
-    // pub fn find(&self, family: &str, style: Option<&str>) -> Option<Font> {
-    //     Font::find(self, family, style)
-    // }
-
     fn as_mut_ptr(&mut self) -> *mut sys::FcConfig {
         if let Some(ref mut cfg) = self.cfg {
             cfg.as_ptr()
@@ -275,6 +267,7 @@ impl FontConfig {
         }
     }
 
+    #[allow(dead_code)]
     fn as_ptr(&self) -> *const sys::FcConfig {
         if let Some(ref cfg) = self.cfg {
             cfg.as_ptr()
@@ -282,27 +275,10 @@ impl FontConfig {
             ptr::null_mut()
         }
     }
-}
 
-/// A very high-level view of a font, only concerned with the name and its file location.
-///
-/// ##Example
-/// ```rust
-/// use fontconfig::{Font, Fontconfig};
-///
-/// let fc = Fontconfig::new().unwrap();
-/// let font = fc.find("sans-serif", Some("italic")).unwrap();
-/// println!("Name: {}\nPath: {}", font.name, font.path.display());
-/// ```
-pub struct Font {
-    /// The true name of this font
-    pub name: String,
-    /// The location of this font on the filesystem.
-    pub path: PathBuf,
-}
-
-impl FontConfig {
-    fn find(&mut self, family: &str, style: Option<&str>) -> Option<Font> {
+    /// Find a font of the given `family` (e.g. Dejavu Sans, FreeSerif),
+    /// optionally filtering by `style`. Both fields are case-insensitive.
+    pub fn find(&mut self, family: &str, style: Option<&str>) -> Option<Font> {
         let mut pat = Pattern::new();
         let family = CString::new(family).ok()?;
         pat.add_string(FC_FAMILY.as_cstr(), &family);
@@ -321,8 +297,61 @@ impl FontConfig {
             })
         })
     }
+
+    /// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
+    pub fn list_fonts(&mut self, mut pattern: Pattern, objects: Option<&mut ObjectSet>) -> FontSet {
+        let os = objects.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
+        let set =
+            unsafe { ffi_dispatch!(LIB, FcFontList, self.as_mut_ptr(), pattern.as_mut_ptr(), os) };
+        // NOTE: Referenced by FontSet, should not drop it.
+        mem::forget(pattern);
+        FontSet {
+            fcset: NonNull::new(set).unwrap(),
+        }
+    }
 }
 
+impl Default for FontConfig {
+    /// Initialise fontconfig and returns the default config.
+    ///
+    /// **PANIC** : If fontconfig fails to initialise
+    fn default() -> Self {
+        let mut guard = INITIALIZED.lock().unwrap();
+        #[cfg(feature = "dlopen")]
+        if LIB_RESULT.is_err() {
+            panic!("Failed to load fontconfig library");
+        }
+        assert_eq!(FcTrue, unsafe { ffi_dispatch!(LIB, FcInit,) });
+        *guard += 1;
+        FontConfig { cfg: None }
+    }
+}
+
+impl Drop for FontConfig {
+    fn drop(&mut self) {
+        let guard = INITIALIZED.lock().unwrap();
+        if guard.checked_sub(1).unwrap() == 0 {
+            unsafe { ffi_dispatch!(LIB, FcFini,) };
+        }
+    }
+}
+
+/// A very high-level view of a font, only concerned with the name and its file location.
+///
+/// ##Example
+/// ```rust
+/// use fontconfig::{Font, FontConfig};
+///
+/// let mut config = FontConfig::default();
+/// let font = config.find("sans-serif", Some("italic")).unwrap();
+/// println!("Name: {}\nPath: {}", font.name, font.path.display());
+/// ```
+pub struct Font {
+    /// The true name of this font
+    pub name: String,
+    /// The location of this font on the filesystem.
+    pub path: PathBuf,
+}
 impl Font {
     #[allow(dead_code)]
     fn print_debug(&self) {
@@ -652,89 +681,6 @@ impl Pattern {
     }
 }
 
-/// Wrapper around `FcStrList`
-///
-/// The wrapper implements `Iterator` so it can be iterated directly, filtered etc.
-/// **Note:** Any entries in the `StrList` that are not valid UTF-8 will be skipped.
-///
-/// ```
-/// use fontconfig::{Fontconfig, Pattern};
-///
-/// let fc = Fontconfig::new().expect("unable to init Fontconfig");
-///
-/// // Find fonts that support japanese
-/// let fonts = fontconfig::list_fonts(&Pattern::new(&fc), None);
-/// let ja_fonts: Vec<_> = fonts
-///     .iter()
-///     .filter(|p| p.lang_set().map_or(false, |mut langs| langs.any(|l| l == "ja")))
-///     .collect();
-/// ```
-pub struct StrList<'a> {
-    list: NonNull<sys::FcStrList>,
-    _maker: PhantomData<&'a sys::FcStrList>,
-}
-
-impl<'a> StrList<'a> {
-    // unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrSet) -> Self {
-    //     Self {
-    //         list: raw_list,
-    //         _life: PhantomData,
-    //     }
-    // }
-    fn as_mut_ptr(&mut self) -> *mut sys::FcStrList {
-        self.list.as_ptr()
-    }
-
-    fn as_ptr(&self) -> *const sys::FcStrList {
-        self.list.as_ptr()
-    }
-}
-
-impl<'a> Drop for StrList<'a> {
-    fn drop(&mut self) {
-        unsafe { ffi_dispatch!(LIB, FcStrListDone, self.as_mut_ptr()) };
-    }
-}
-
-impl<'a> Iterator for StrList<'a> {
-    type Item = &'a str;
-
-    fn next(&mut self) -> Option<&'a str> {
-        let lang_str: *mut sys::FcChar8 =
-            unsafe { ffi_dispatch!(LIB, FcStrListNext, self.as_mut_ptr()) };
-        if lang_str.is_null() {
-            None
-        } else {
-            match unsafe { CStr::from_ptr(lang_str as *const c_char) }.to_str() {
-                Ok(s) => Some(s),
-                _ => self.next(),
-            }
-        }
-    }
-}
-
-/// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
-pub fn list_fonts(
-    config: &mut FontConfig,
-    mut pattern: Pattern,
-    objects: Option<&mut ObjectSet>,
-) -> FontSet {
-    let os = objects.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
-    let set = unsafe {
-        ffi_dispatch!(
-            LIB,
-            FcFontList,
-            config.as_mut_ptr(),
-            pattern.as_mut_ptr(),
-            os
-        )
-    };
-    mem::forget(pattern);
-    FontSet {
-        fcset: NonNull::new(set).unwrap(),
-    }
-}
-
 /// Wrapper around `FcObjectSet`.
 pub struct ObjectSet {
     fcset: NonNull<sys::FcObjectSet>,
@@ -769,6 +715,7 @@ impl ObjectSet {
         self.fcset.as_ptr()
     }
 
+    #[allow(dead_code)]
     fn as_ptr(&self) -> *const sys::FcObjectSet {
         self.fcset.as_ptr()
     }
@@ -933,13 +880,13 @@ mod tests {
 
     #[test]
     fn it_works() {
-        FontConfig::current();
-        assert!(FontConfig::new().is_some());
+        FontConfig::default();
+        // assert!(FontConfig::new().is_some());
     }
 
     #[test]
     fn find_font() {
-        let mut config = FontConfig::current();
+        let mut config = FontConfig::default();
         config.find("dejavu sans", None).unwrap().print_debug();
         config
             .find("dejavu sans", Some("oblique"))
@@ -949,8 +896,8 @@ mod tests {
 
     #[test]
     fn iter_and_print() {
-        let mut config = FontConfig::current();
-        let fontset = list_fonts(&mut config, Pattern::new(), None);
+        let mut config = FontConfig::default();
+        let fontset = config.list_fonts(Pattern::new(), None);
         for pattern in fontset.iter() {
             println!("{:?}", pattern.name());
         }
@@ -961,7 +908,7 @@ mod tests {
 
     #[test]
     fn iter_lang_set() {
-        let mut config = FontConfig::current();
+        let mut config = FontConfig::default();
         let mut pat = Pattern::new();
         let family = CString::new("dejavu sans").unwrap();
         pat.add_string(FC_FAMILY.as_cstr(), &family);
@@ -991,7 +938,7 @@ mod tests {
 
     #[test]
     fn iter_font_sort() {
-        let mut config = FontConfig::current();
+        let mut config = FontConfig::default();
         let mut pat = Pattern::new();
         let family = CString::new("dejavu sans").unwrap();
         pat.add_string(FC_FAMILY.as_cstr(), &family);

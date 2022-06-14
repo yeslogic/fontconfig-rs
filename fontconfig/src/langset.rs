@@ -77,7 +77,7 @@ impl LangSet {
     /// lang is removed from self.
     /// lang should be of the form Ll-Tt where Ll is a two or three letter language from ISO 639 and
     /// Tt is a territory from ISO 3166.
-    pub fn remove(&mut self, lang: &CStr) {
+    pub fn remove(&mut self, _lang: &CStr) {
         unimplemented!("requires version 2.9.0");
         // let lang = lang.as_ptr() as *const u8;
         // let _ = unsafe { ffi_dispatch!(LIB, FcLangSetDel, self.as_mut_ptr(), lang) };

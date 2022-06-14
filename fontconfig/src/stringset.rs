@@ -48,7 +48,27 @@ impl Drop for StringSet {
     }
 }
 
+/// Wrapper around `FcStrList`
 ///
+/// The wrapper implements `Iterator` so it can be iterated directly, filtered etc.
+/// **Note:** Any entries in the `StringSetIter` that are not valid UTF-8 will be skipped.
+///
+/// ```
+/// use fontconfig::{FontConfig, Pattern};
+///
+/// let mut config = FontConfig::default(); //.expect("unable to init FontConfig");
+///
+/// // Find fonts that support japanese
+/// let mut fonts = config.list_fonts(Pattern::new(), None);
+/// let ja_fonts: Vec<_> = fonts
+///         .iter_mut()
+///         .filter_map(|mut p: Pattern| {
+///             let langset = p.lang_set()?;
+///             Some(langset.langs().iter().any(|l| l == "ja"))
+///         })
+///         .collect();
+/// ```
+#[doc(alias = "FcStrList")]
 pub struct StringSetIter<'a> {
     handle: NonNull<sys::FcStrList>,
     _marker: PhantomData<&'a StringSet>,
@@ -89,5 +109,24 @@ impl<'a> Iterator for StringSetIter<'a> {
                 .ok()
                 .or_else(|| self.next())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{FontConfig, Pattern};
+
+    #[test]
+    fn it_works() {
+        let mut config = FontConfig::default();
+        let mut fonts = config.list_fonts(Pattern::new(), None);
+        let ja_fonts: Vec<_> = fonts
+            .iter_mut()
+            .filter_map(|mut p: Pattern| {
+                let langset = p.lang_set().unwrap();
+                // .map_or(false, |mut langs| langs.langs().iter().any(|l| l == "ja"))
+                Some(langset.langs().iter().any(|l| l == "ja"))
+            })
+            .collect();
     }
 }

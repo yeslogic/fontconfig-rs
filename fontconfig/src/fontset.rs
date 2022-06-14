@@ -44,8 +44,16 @@ impl FontSet {
     }
 
     /// Iterate the fonts (as `Patterns`) in this `FontSet`.
-    pub fn iter<'a>(&'a self) -> FontSetIter<'a> {
-        FontSetIter {
+    pub fn iter<'a>(&'a self) -> Iter<'a> {
+        Iter {
+            fcset: self,
+            index: 0,
+        }
+    }
+
+    /// Iterate the fonts (as `Patterns`) in this `FontSet`.
+    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a> {
+        IterMut {
             fcset: self,
             index: 0,
         }
@@ -67,12 +75,12 @@ impl Drop for FontSet {
 }
 
 #[doc(hidden)]
-pub struct FontSetIter<'a> {
+pub struct Iter<'a> {
     fcset: &'a FontSet,
     index: usize,
 }
 
-impl<'a> Iterator for FontSetIter<'a> {
+impl<'a> Iterator for Iter<'a> {
     // FIXME: return reference.
     type Item = Pattern;
 
@@ -82,7 +90,41 @@ impl<'a> Iterator for FontSetIter<'a> {
             return None;
         }
         let pat = unsafe {
-            let font = (*fcset).fonts.offset(self.index as isize);
+            let font = (*fcset).fonts.add(self.index);
+            if font.is_null() {
+                return None;
+            }
+            *font
+        };
+        if pat.is_null() {
+            return None;
+        }
+        let pat = unsafe {
+            ffi_dispatch!(LIB, FcPatternReference, pat);
+            NonNull::new_unchecked(pat)
+        };
+        self.index += 1;
+        Some(Pattern { pat })
+    }
+}
+
+#[doc(hidden)]
+pub struct IterMut<'a> {
+    fcset: &'a mut FontSet,
+    index: usize,
+}
+
+impl<'a> Iterator for IterMut<'a> {
+    // FIXME: return reference.
+    type Item = Pattern;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let fcset = self.fcset.as_ptr();
+        if self.index >= unsafe { (*fcset).nfont } as usize {
+            return None;
+        }
+        let pat = unsafe {
+            let font = (*fcset).fonts.add(self.index);
             if font.is_null() {
                 return None;
             }

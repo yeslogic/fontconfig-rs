@@ -55,19 +55,22 @@ impl Drop for StringSet {
 /// **Note:** Any entries in the `StringSetIter` that are not valid UTF-8 will be skipped.
 ///
 /// ```
-/// use fontconfig::{FontConfig, Pattern};
+/// use fontconfig::{FontConfig, OwnedPattern};
 ///
 /// let mut config = FontConfig::default(); //.expect("unable to init FontConfig");
 ///
 /// // Find fonts that support japanese
-/// let mut fonts = config.list_fonts(Pattern::new(), None);
+/// let mut pat = OwnedPattern::new();
+/// let mut fonts = pat.font_list(&mut config, None);
 /// let ja_fonts: Vec<_> = fonts
 ///         .iter_mut()
-///         .filter_map(|mut p: Pattern| {
-///             let langset = p.lang_set()?;
-///             Some(langset.langs().iter().any(|l| l == "ja"))
+///         .filter(|p| {
+///             p.lang_set().map_or(false, |langset|
+///                 langset.langs().iter().any(|l| l == "ja"))
 ///         })
 ///         .collect();
+/// println!("{:?}", ja_fonts);
+/// println!("{}", ja_fonts.len());
 /// ```
 #[doc(alias = "FcStrList")]
 pub struct StringSetIter<'a> {
@@ -121,21 +124,21 @@ impl Default for StringSet {
 
 #[cfg(test)]
 mod tests {
-    use crate::{FontConfig, Pattern};
+    use crate::{FontConfig, OwnedPattern};
 
     #[test]
     fn list_fonts_of_ja() {
         let mut config = FontConfig::default();
-        let mut fonts = config.font_list(Pattern::new(), None);
-        let ja_fonts = fonts.iter_mut().filter_map(|mut p: Pattern| {
-            let langset = p.lang_set()?;
-            // .map_or(false, |mut langs| langs.langs().iter().any(|l| l == "ja"))
-            if langset.langs().iter().any(|l| l == "ja") {
-                Some(p)
-            } else {
-                None
-            }
-        });
-        assert!(ja_fonts.count() > 0);
+        let pat = OwnedPattern::new();
+        let fonts = pat.font_list(&mut config, None);
+        let ja_fonts: Vec<_> = fonts
+            .iter()
+            .filter(|p| {
+                p.lang_set()
+                    .map_or(false, |langs| langs.langs().iter().any(|l| l == "ja"))
+            })
+            .collect();
+        println!("{:?}", ja_fonts);
+        assert!(!ja_fonts.is_empty());
     }
 }

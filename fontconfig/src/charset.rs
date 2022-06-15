@@ -89,7 +89,7 @@ impl<'a> CharSet<'a> {
         self.fcset.as_ptr()
     }
 
-    fn as_mut_ptr(&mut self) -> *mut sys::FcCharSet {
+    pub(crate) fn as_mut_ptr(&mut self) -> *mut sys::FcCharSet {
         self.fcset.as_ptr()
     }
 }

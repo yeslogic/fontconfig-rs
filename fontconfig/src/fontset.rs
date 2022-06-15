@@ -1,5 +1,4 @@
 //!
-use std::mem;
 use std::ptr::NonNull;
 
 use fontconfig_sys as sys;
@@ -11,33 +10,34 @@ use sys::statics::LIB;
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
-use crate::{Blanks, FcTrue, Pattern};
+use crate::{Blanks, FcTrue, OwnedPattern, Pattern};
 
 /// Wrapper around `FcFontSet`.
 #[repr(transparent)]
-pub struct FontSet {
+pub struct FontSet<'pat> {
     pub(crate) fcset: NonNull<sys::FcFontSet>,
+    pub(crate) _marker: ::std::marker::PhantomData<&'pat mut Pattern>,
 }
 
-impl FontSet {
+impl<'pat> FontSet<'pat> {
     /// Create a new, empty `FontSet`.
-    pub fn new() -> FontSet {
+    pub fn new() -> FontSet<'pat> {
         let fcset = unsafe { ffi_dispatch!(LIB, FcFontSetCreate,) };
         FontSet {
             fcset: NonNull::new(fcset).unwrap(),
+            _marker: ::std::marker::PhantomData,
         }
     }
 
     /// Add a `Pattern` to this `FontSet`.
     #[doc(alias = "FcFontSetAdd")]
-    pub fn push(&mut self, mut pat: Pattern) {
+    pub fn push(&mut self, pat: OwnedPattern) {
         unsafe {
             assert_eq!(
-                ffi_dispatch!(LIB, FcFontSetAdd, self.as_mut_ptr(), pat.as_mut_ptr()),
+                ffi_dispatch!(LIB, FcFontSetAdd, self.as_mut_ptr(), pat.into_inner()),
                 FcTrue,
             );
         }
-        mem::forget(pat);
     }
 
     /// How many fonts are in this `FontSet`
@@ -56,7 +56,7 @@ impl FontSet {
     }
 
     /// Iterate the fonts (as `Patterns`) in this `FontSet`.
-    pub fn iter(&self) -> Iter {
+    pub fn iter<'fs>(&'fs self) -> Iter<'fs, 'pat> {
         Iter {
             fcset: self,
             index: 0,
@@ -64,7 +64,7 @@ impl FontSet {
     }
 
     /// Iterate the fonts (as `Patterns`) in this `FontSet`.
-    pub fn iter_mut(&mut self) -> IterMut<'_> {
+    pub fn iter_mut<'fs>(&'fs mut self) -> IterMut<'fs, 'pat> {
         IterMut {
             fcset: self,
             index: 0,
@@ -113,35 +113,36 @@ impl FontSet {
     }
 }
 
-impl Default for FontSet {
-    fn default() -> FontSet {
+impl<'a> Default for FontSet<'a> {
+    fn default() -> FontSet<'a> {
         FontSet::new()
     }
 }
 
-impl Drop for FontSet {
+impl Drop for FontSet<'_> {
     fn drop(&mut self) {
         unsafe { ffi_dispatch!(LIB, FcFontSetDestroy, self.as_mut_ptr()) }
     }
 }
 
 #[doc(hidden)]
-pub struct Iter<'a> {
-    fcset: &'a FontSet,
+pub struct Iter<'fs, 'pat> {
+    fcset: &'fs FontSet<'pat>,
     index: usize,
 }
 
-impl<'a> Iterator for Iter<'a> {
-    // FIXME: return reference.
-    type Item = Pattern;
+impl<'fs, 'pat> Iterator for Iter<'fs, 'pat> {
+    type Item = &'pat Pattern;
 
     fn next(&mut self) -> Option<Self::Item> {
         let fcset = self.fcset.as_ptr();
-        if self.index >= unsafe { (*fcset).nfont } as usize {
+        let index = self.index;
+        self.index += 1;
+        if index >= unsafe { (*fcset).nfont } as usize {
             return None;
         }
         let pat = unsafe {
-            let font = (*fcset).fonts.add(self.index);
+            let font = (*fcset).fonts.add(index);
             if font.is_null() {
                 return None;
             }
@@ -150,32 +151,28 @@ impl<'a> Iterator for Iter<'a> {
         if pat.is_null() {
             return None;
         }
-        let pat = unsafe {
-            ffi_dispatch!(LIB, FcPatternReference, pat);
-            NonNull::new_unchecked(pat)
-        };
-        self.index += 1;
-        Some(Pattern { pat })
+        Some(unsafe { &*(pat as *const sys::FcPattern as *const Pattern) })
     }
 }
 
 #[doc(hidden)]
-pub struct IterMut<'a> {
-    fcset: &'a mut FontSet,
+pub struct IterMut<'fs, 'pat> {
+    fcset: &'fs mut FontSet<'pat>,
     index: usize,
 }
 
-impl<'a> Iterator for IterMut<'a> {
-    // FIXME: return reference.
-    type Item = Pattern;
+impl<'fs, 'pat> Iterator for IterMut<'fs, 'pat> {
+    type Item = &'pat mut Pattern;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let index = self.index;
         let fcset = self.fcset.as_ptr();
-        if self.index >= unsafe { (*fcset).nfont } as usize {
+        self.index += 1;
+        if index >= unsafe { (*fcset).nfont } as usize {
             return None;
         }
         let pat = unsafe {
-            let font = (*fcset).fonts.add(self.index);
+            let font = (*fcset).fonts.add(index);
             if font.is_null() {
                 return None;
             }
@@ -184,11 +181,6 @@ impl<'a> Iterator for IterMut<'a> {
         if pat.is_null() {
             return None;
         }
-        let pat = unsafe {
-            ffi_dispatch!(LIB, FcPatternReference, pat);
-            NonNull::new_unchecked(pat)
-        };
-        self.index += 1;
-        Some(Pattern { pat })
+        Some(unsafe { &mut *(pat as *mut sys::FcPattern as *mut Pattern) })
     }
 }

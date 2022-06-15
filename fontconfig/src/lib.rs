@@ -44,7 +44,7 @@
 //!
 //! [dlopen]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/dlopen.html
 
-use fontconfig_sys as sys;
+pub use fontconfig_sys as sys;
 use sys::ffi_dispatch;
 
 #[cfg(feature = "dlopen")]
@@ -53,7 +53,6 @@ use sys::statics::{LIB, LIB_RESULT};
 use sys::*;
 
 use std::ffi::CString;
-use std::mem;
 
 use std::path::PathBuf;
 use std::ptr::{self, NonNull};
@@ -62,8 +61,6 @@ use std::sync::{Arc, Mutex};
 
 pub use sys::constants::*;
 use sys::FcBool;
-
-use thiserror::Error;
 
 pub mod blanks;
 pub mod charset;
@@ -81,7 +78,7 @@ pub use fontset::FontSet;
 pub use langset::{LangSet, LangSetCmp};
 pub use matrix::Matrix;
 pub use objectset::ObjectSet;
-pub use pattern::Pattern;
+pub use pattern::{OwnedPattern, Pattern};
 pub use strings::FcStr;
 pub use stringset::StringSet;
 
@@ -98,7 +95,7 @@ static INITIALIZED: once_cell::sync::Lazy<Arc<Mutex<usize>>> =
 /// Error type returned from Pattern::format.
 ///
 /// The error holds the name of the unknown format.
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// The format is not known.
     #[error("Unknown format {0}")]
@@ -241,7 +238,8 @@ impl FontConfig {
     /// otherwise the results will not be correct.
     /// If config is NULL, the current configuration is used.
     /// Returns NULL if an error occurs during this process.
-    pub fn match_(&mut self, sets: &mut [FontSet], pat: &mut Pattern) -> Pattern {
+    #[doc(alias = "FcFontSetMatch")]
+    pub fn fontset_match(&mut self, sets: &mut [FontSet], pat: &mut Pattern) -> OwnedPattern {
         // pat.default_substitute();
         // self.substitute(pat, MatchKind::Font);
         let mut result = sys::FcResultNoMatch;
@@ -257,7 +255,7 @@ impl FontConfig {
             )
         };
         result.ok().unwrap();
-        Pattern {
+        OwnedPattern {
             pat: NonNull::new(pat).unwrap(),
         }
     }
@@ -282,7 +280,7 @@ impl FontConfig {
     /// Find a font of the given `family` (e.g. Dejavu Sans, FreeSerif),
     /// optionally filtering by `style`. Both fields are case-insensitive.
     pub fn find(&mut self, family: &str, style: Option<&str>) -> Option<Font> {
-        let mut pat = Pattern::new();
+        let mut pat = OwnedPattern::new();
         let family = CString::new(family).ok()?;
         pat.add_string(FC_FAMILY.as_cstr(), &family);
 
@@ -299,19 +297,6 @@ impl FontConfig {
                 path: PathBuf::from(filename),
             })
         })
-    }
-
-    /// Return a `FontSet` containing Fonts that match the supplied `pattern` and `objects`.
-    #[doc(alias = "FcFontList")]
-    pub fn font_list(&mut self, mut pattern: Pattern, objects: Option<&mut ObjectSet>) -> FontSet {
-        let os = objects.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
-        let set =
-            unsafe { ffi_dispatch!(LIB, FcFontList, self.as_mut_ptr(), pattern.as_mut_ptr(), os) };
-        // NOTE: Referenced by FontSet, should not drop it.
-        mem::forget(pattern);
-        FontSet {
-            fcset: NonNull::new(set).unwrap(),
-        }
     }
 }
 
@@ -383,9 +368,36 @@ impl FromStr for FontFormat {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// library version number
+pub struct Version {
+    /// major version number
+    pub major: u32,
+    /// minor version number
+    pub minor: u32,
+    /// micro version number
+    pub revision: u32,
+}
+
+impl std::fmt::Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.revision)
+    }
+}
+
 /// Returns the version number of the library.
-pub fn version() -> i32 {
-    unsafe { ffi_dispatch!(LIB, FcGetVersion,) }
+pub fn version() -> Version {
+    let version = unsafe { ffi_dispatch!(LIB, FcGetVersion,) as u32 };
+    let major = version / 10000;
+    let version = version % 10000;
+    let minor = version / 100;
+    let revision = version % 100;
+
+    Version {
+        major,
+        minor,
+        revision,
+    }
 }
 
 #[cfg(test)]
@@ -410,7 +422,8 @@ mod tests {
     #[test]
     fn iter_and_print() {
         let mut config = FontConfig::default();
-        let fontset = config.font_list(Pattern::new(), None);
+        let pat = OwnedPattern::new();
+        let fontset = pat.font_list(&mut config, None);
         for pattern in fontset.iter() {
             println!("{:?}", pattern.name());
         }
@@ -422,10 +435,10 @@ mod tests {
     #[test]
     fn iter_lang_set() {
         let mut config = FontConfig::default();
-        let mut pat = Pattern::new();
+        let mut pat = OwnedPattern::new();
         let family = CString::new("dejavu sans").unwrap();
         pat.add_string(FC_FAMILY.as_cstr(), &family);
-        let mut pattern = pat.font_match(&mut config);
+        let pattern = pat.font_match(&mut config);
         for lang in pattern.lang_set().unwrap().langs().iter() {
             println!("{:?}", lang);
         }
@@ -452,9 +465,11 @@ mod tests {
     #[test]
     fn iter_font_sort() {
         let mut config = FontConfig::default();
-        let mut pat = Pattern::new();
+        let mut pat = OwnedPattern::new();
         let family = CString::new("dejavu sans").unwrap();
         pat.add_string(FC_FAMILY.as_cstr(), &family);
+        pat.default_substitute();
+        config.substitute(&mut pat, MatchKind::Pattern);
         let font_set = pat.font_sort(&mut config, false).unwrap();
 
         for font in font_set.iter() {

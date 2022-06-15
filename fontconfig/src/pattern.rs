@@ -1,6 +1,8 @@
 //!
+use std::borrow::{Borrow, BorrowMut};
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::os::raw::c_char;
 use std::ptr::{self, NonNull};
 use std::str::FromStr;
@@ -21,38 +23,36 @@ use crate::{
     ObjectSet, Result, ToResult,
 };
 
-/// A safe wrapper around fontconfig's `FcPattern`.
-pub struct Pattern {
+/// Representation of a borrowed fontconfig's `FcPattern`.
+#[repr(transparent)]
+pub struct Pattern(FcPattern);
+
+/// A type representing an owned fontconfig's `FcPattern`.
+#[repr(transparent)]
+pub struct OwnedPattern {
     /// Raw pointer to `FcPattern`
     pub(crate) pat: NonNull<FcPattern>,
 }
 
-impl Pattern {
+impl OwnedPattern {
     /// Create a new empty `Pattern`.
-    pub fn new() -> Pattern {
+    pub fn new() -> OwnedPattern {
         let pat = unsafe { ffi_dispatch!(LIB, FcPatternCreate,) };
         assert!(!pat.is_null());
 
-        Pattern {
+        OwnedPattern {
             pat: NonNull::new(pat).expect("out of memory"),
         }
     }
 
-    /// Create a `Pattern` from a raw fontconfig FcPattern pointer.
-    ///
-    /// The pattern is referenced.
-    ///
-    /// **Panic:** If the pointer is null.
-    ///
-    /// **Safety:** The pattern pointer must be valid/non-null.
-    // pub unsafe fn from_raw(pat: *mut FcPattern) -> Pattern {
-    //     // ffi_dispatch!(LIB, FcPatternReference, pat);
-    //
-    //     Pattern {
-    //         pat: NonNull::new(pat).unwrap(),
-    //     }
-    // }
+    pub(crate) fn into_inner(self) -> *mut FcPattern {
+        let ptr = self.pat.as_ptr() as *mut FcPattern;
+        unsafe { ffi_dispatch!(LIB, FcPatternReference, ptr) }
+        ptr
+    }
+}
 
+impl Pattern {
     /// Add a key-value pair to this pattern.
     ///
     /// See useful keys in the [fontconfig reference][1].
@@ -82,7 +82,7 @@ impl Pattern {
             ffi_dispatch!(
                 LIB,
                 FcPatternGetString,
-                self.pat.as_ptr(),
+                self.as_ptr() as *mut FcPattern,
                 name.as_ptr(),
                 0,
                 &mut ret as *mut _
@@ -100,7 +100,7 @@ impl Pattern {
             ffi_dispatch!(
                 LIB,
                 FcPatternGetInteger,
-                self.pat.as_ptr(),
+                self.as_ptr() as *mut FcPattern,
                 name.as_ptr(),
                 0,
                 &mut ret as *mut i32
@@ -113,7 +113,7 @@ impl Pattern {
     /// Print this pattern to stdout with all its values.
     pub fn print(&self) {
         unsafe {
-            ffi_dispatch!(LIB, FcPatternPrint, self.pat.as_ptr());
+            ffi_dispatch!(LIB, FcPatternPrint, self.as_ptr());
         }
     }
 
@@ -121,16 +121,16 @@ impl Pattern {
     ///
     /// Returns a new pattern that only has those objects from p that are in os.
     /// If os is None, a duplicate of p is returned.
-    pub fn filter(&self, os: Option<&mut ObjectSet>) -> Option<Self> {
+    pub fn filter(&self, os: Option<&mut ObjectSet>) -> Option<OwnedPattern> {
         let os = os.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
         let pat = unsafe {
-            let pat = ffi_dispatch!(LIB, FcPatternFilter, self.pat.as_ptr(), os);
+            let pat = ffi_dispatch!(LIB, FcPatternFilter, self.as_ptr() as *mut FcPattern, os);
             if pat.is_null() {
                 return None;
             }
             pat
         };
-        NonNull::new(pat).map(|pat| Pattern { pat })
+        NonNull::new(pat).map(|pat| OwnedPattern { pat })
     }
 
     /// Format a pattern into a string according to a format specifier
@@ -141,7 +141,7 @@ impl Pattern {
             let s = ffi_dispatch!(
                 LIB,
                 FcPatternFormat,
-                self.pat.as_ptr(),
+                self.as_ptr() as *mut FcPattern,
                 fmt.as_ptr() as *const u8
             );
             FcStr::from_ptr(s)
@@ -157,12 +157,17 @@ impl Pattern {
     /// * Patterns without a specified pixel size are given one computed from any specified point size (default 12), dpi (default 75) and scale (default 1).
     pub fn default_substitute(&mut self) {
         unsafe {
-            ffi_dispatch!(LIB, FcDefaultSubstitute, self.pat.as_mut());
+            ffi_dispatch!(LIB, FcDefaultSubstitute, self.as_mut_ptr());
         }
     }
 
     /// Get the best available match for this pattern, returned as a new pattern.
-    pub fn font_match(&mut self, config: &mut FontConfig) -> Pattern {
+    ///
+    /// Finds the font in sets most closely matching pattern and returns the result of `render_prepare` for that font and the provided pattern.
+    /// This function should be called only after `FontConfig::substitute` and `default_substitute` have been called for the pattern.
+    /// otherwise the results will not be correct.
+    #[doc(alias = "FcFontMatch")]
+    pub fn font_match(&mut self, config: &mut FontConfig) -> OwnedPattern {
         // self.default_substitute();
         // config.substitute(self, MatchKind::Pattern);
 
@@ -172,22 +177,46 @@ impl Pattern {
                 LIB,
                 FcFontMatch,
                 config.as_mut_ptr(),
-                self.pat.as_mut(),
+                self.as_mut_ptr(),
                 &mut res
             );
             res.ok().unwrap();
-            Pattern {
+            OwnedPattern {
                 pat: NonNull::new(pat).unwrap(),
             }
         }
     }
 
+    /// List fonts
+    ///
+    /// Selects fonts matching p,
+    /// creates patterns from those fonts containing only the objects in os and returns the set of unique such patterns.
+    /// If config is NULL, the default configuration is checked to be up to date, and used.
+    pub fn font_list(&self, config: &mut FontConfig, os: Option<&mut ObjectSet>) -> FontSet<'_> {
+        let os = os.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
+        let set = unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcFontList,
+                config.as_mut_ptr(),
+                self.as_ptr() as *mut _,
+                os
+            )
+        };
+        // NOTE: Referenced by FontSet, should not drop it.
+        FontSet {
+            fcset: NonNull::new(set).unwrap(),
+            _marker: PhantomData,
+        }
+    }
+
     /// Get the list of fonts sorted by closeness to self.
+    ///
     /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
-    pub fn font_sort(&mut self, config: &mut FontConfig, trim: bool) -> Option<FontSet> {
-        // self.default_substitute();
-        // config.substitute(self, MatchKind::Pattern);
-        let mut pat = self.clone();
+    /// The union of Unicode coverage of all of the fonts is returned in csp, if csp is not None.
+    /// This function should be called only after `FontConfig::substitute` and `default_substitute` have been called for this pattern;
+    /// otherwise the results will not be correct.
+    pub fn font_sort(&mut self, config: &mut FontConfig, trim: bool) -> Result<FontSet<'static>> {
         unsafe {
             // What is this result actually used for? Seems redundant with
             // return type.
@@ -199,15 +228,63 @@ impl Pattern {
                 LIB,
                 FcFontSort,
                 config.as_mut_ptr(),
-                pat.as_mut_ptr(),
+                self.as_ptr() as *mut _,
+                if trim { FcTrue } else { FcFalse }, // Trim font list.
+                &mut charsets,
+                &mut res
+            );
+            res.ok()?;
+            if fcset.is_null() {
+                return Err(Error::OutOfMemory);
+            }
+            let fcset = NonNull::new_unchecked(fcset);
+            Ok(FontSet {
+                fcset,
+                _marker: PhantomData,
+            })
+        }
+    }
+
+    /// Get the list of fonts sorted by closeness to self.
+    ///
+    /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
+    /// The union of Unicode coverage of all of the fonts is returned in csp, if csp is not None.
+    /// This function should be called only after `FontConfig::substitute` and `default_substitute` have been called for this pattern;
+    /// otherwise the results will not be correct.
+    pub fn font_sort_with_charset(
+        &mut self,
+        config: &mut FontConfig,
+        trim: bool,
+    ) -> Option<(FontSet<'_>, CharSet<'static>)> {
+        // self.default_substitute();
+        // config.substitute(self, MatchKind::Pattern);
+        unsafe {
+            // What is this result actually used for? Seems redundant with
+            // return type.
+            let mut res = sys::FcResultNoMatch;
+
+            let mut charsets: *mut _ = ptr::null_mut();
+
+            let fcset = ffi_dispatch!(
+                LIB,
+                FcFontSort,
+                config.as_mut_ptr(),
+                self.as_mut_ptr(),
                 if trim { FcTrue } else { FcFalse }, // Trim font list.
                 &mut charsets,
                 &mut res
             );
             res.opt()?;
-            Some(FontSet {
-                fcset: NonNull::new(fcset).unwrap(),
-            })
+            Some((
+                FontSet {
+                    fcset: NonNull::new(fcset).unwrap(),
+                    _marker: PhantomData,
+                },
+                CharSet {
+                    fcset: NonNull::new(charsets).unwrap(),
+                    _marker: PhantomData,
+                },
+            ))
         }
     }
 
@@ -217,17 +294,17 @@ impl Pattern {
     /// elements of pat not appearing in font and the best matching value from pat for elements appearing in both.
     /// The result is passed to FcConfigSubstituteWithPat with kind FcMatchFont and then returned.
     #[doc(alias = "FcFontRenderPrepare")]
-    pub fn render_prepare(&self, font: &Self) -> Self {
+    pub fn render_prepare(&mut self, config: &mut FontConfig, font: &mut Self) -> OwnedPattern {
         let pat = unsafe {
             ffi_dispatch!(
                 LIB,
                 FcFontRenderPrepare,
-                ptr::null_mut(),
-                self.pat.as_ptr(),
-                font.pat.as_ptr()
+                config.as_mut_ptr(),
+                self.as_mut_ptr(),
+                font.as_mut_ptr()
             )
         };
-        Pattern {
+        OwnedPattern {
             pat: NonNull::new(pat).unwrap(),
         }
     }
@@ -240,7 +317,7 @@ impl Pattern {
             ffi_dispatch!(
                 LIB,
                 FcPatternGetCharSet,
-                self.pat.as_ptr(),
+                self.as_ptr() as *mut _,
                 FC_CHARSET.as_ptr(),
                 0,
                 &mut charsets
@@ -296,16 +373,39 @@ impl Pattern {
 
     /// Returns a raw pointer to underlying `FcPattern`.
     pub fn as_ptr(&self) -> *const FcPattern {
-        self.pat.as_ptr()
+        self as *const _ as *const FcPattern
     }
 
     /// Returns an unsafe mutable pointer to the underlying `FcPattern`.
     pub fn as_mut_ptr(&mut self) -> *mut FcPattern {
-        self.pat.as_ptr()
+        self as *mut _ as *mut FcPattern
     }
 }
 
-impl FromStr for Pattern {
+impl ToOwned for Pattern {
+    type Owned = OwnedPattern;
+
+    fn to_owned(&self) -> OwnedPattern {
+        OwnedPattern {
+            pat: NonNull::new(unsafe { ffi_dispatch!(LIB, FcPatternDuplicate, self.as_ptr()) })
+                .unwrap(),
+        }
+    }
+}
+
+impl Borrow<Pattern> for OwnedPattern {
+    fn borrow(&self) -> &Pattern {
+        unsafe { &*(self.as_ptr() as *const Pattern) }
+    }
+}
+
+impl BorrowMut<Pattern> for OwnedPattern {
+    fn borrow_mut(&mut self) -> &mut Pattern {
+        unsafe { &mut *(self.as_mut_ptr() as *mut Pattern) }
+    }
+}
+
+impl FromStr for OwnedPattern {
     type Err = Error;
     /// Converts `name` from the standard text format described above into a pattern.
     fn from_str(s: &str) -> Result<Self> {
@@ -313,7 +413,7 @@ impl FromStr for Pattern {
         unsafe {
             let pat = ffi_dispatch!(LIB, FcNameParse, c_str.as_ptr().cast());
             if let Some(pat) = NonNull::new(pat) {
-                Ok(Pattern { pat })
+                Ok(OwnedPattern { pat })
             } else {
                 Err(Error::OutOfMemory)
             }
@@ -323,7 +423,7 @@ impl FromStr for Pattern {
 
 impl std::fmt::Debug for Pattern {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let fcstr = unsafe { ffi_dispatch!(LIB, FcNameUnparse, self.pat.as_ptr()) };
+        let fcstr = unsafe { ffi_dispatch!(LIB, FcNameUnparse, self.as_ptr() as *mut FcPattern) };
         let fcstr = unsafe { CStr::from_ptr(fcstr as *const c_char) };
         let result = write!(f, "{:?}", fcstr);
         unsafe { ffi_dispatch!(LIB, FcStrFree, fcstr.as_ptr() as *mut u8) };
@@ -331,16 +431,16 @@ impl std::fmt::Debug for Pattern {
     }
 }
 
-impl Clone for Pattern {
+impl Clone for OwnedPattern {
     fn clone(&self) -> Self {
         let cloned = unsafe { ffi_dispatch!(LIB, FcPatternDuplicate, self.pat.as_ptr()) };
-        Pattern {
+        OwnedPattern {
             pat: NonNull::new(cloned).unwrap(),
         }
     }
 }
 
-impl Drop for Pattern {
+impl Drop for OwnedPattern {
     fn drop(&mut self) {
         unsafe {
             ffi_dispatch!(LIB, FcPatternDestroy, self.pat.as_ptr());
@@ -348,16 +448,30 @@ impl Drop for Pattern {
     }
 }
 
+impl Deref for OwnedPattern {
+    type Target = Pattern;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.pat.as_ptr() as *const _) }
+    }
+}
+
+impl DerefMut for OwnedPattern {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *(self.pat.as_ptr() as *mut _) }
+    }
+}
+
 impl Pattern {
     /// Get the languages set of this pattern.
-    pub fn lang_set(&mut self) -> Option<LangSet> {
+    pub fn lang_set(&self) -> Option<LangSet> {
         // let mut langset = LangSet::new();
         let langset = unsafe {
             let mut langset = ffi_dispatch!(LIB, FcLangSetCreate,);
             ffi_dispatch!(
                 LIB,
                 FcPatternGetLangSet,
-                self.as_mut_ptr(),
+                self.as_ptr() as *mut _,
                 FC_LANG.as_ptr(),
                 0,
                 &mut langset
@@ -386,8 +500,26 @@ impl Pattern {
     }
 }
 
-impl Default for Pattern {
+impl Default for OwnedPattern {
     fn default() -> Self {
-        Pattern::new()
+        OwnedPattern::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_into_inner() {
+        let mut pat = super::OwnedPattern::new();
+        pat.add_string(
+            crate::FC_FAMILY.as_cstr(),
+            &std::ffi::CString::new("nomospace").unwrap(),
+        );
+        let pat = pat.into_inner();
+        let pat = pat as *mut super::Pattern;
+        assert_eq!(
+            unsafe { &*pat }.string(crate::FC_FAMILY.as_cstr()),
+            Some("nomospace")
+        );
     }
 }

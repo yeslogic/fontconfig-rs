@@ -22,7 +22,7 @@ pub struct FcStr(NonNull<sys::FcChar8>);
 impl FcStr {
     #[doc(hidden)]
     pub unsafe fn from_ptr(ptr: *mut sys::FcChar8) -> Option<Self> {
-        NonNull::new(ptr).map(|ptr| FcStr(ptr))
+        NonNull::new(ptr).map(FcStr)
     }
 }
 

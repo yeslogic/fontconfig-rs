@@ -18,26 +18,16 @@ homepage = "https://github.com/yeslogic/fontconfig-rs"
 documentation = "https://docs.rs/crate/fontconfig"
 repository = "https://github.com/yeslogic/fontconfig-rs"
 
-[[bin]]
-name = "fc-match"
-required-features = ["clap"]
-
-[[bin]]
-name = "fc-list"
-required-features = ["clap"]
-
-[[bin]]
-name = "fc-pattern"
-required-features = ["clap"]
-
 [dependencies]
 thiserror = "1.0"
 once_cell = "1.12"
-clap = { version = "3.2", optional = true, features = ["derive"] }
 
 [dependencies.yeslogic-fontconfig-sys]
 version = "3.0.0"
 path = "../fontconfig-sys"
+
+[dev-dependencies]
+clap = { version = "3.2", features = ["derive"] }
 
 [features]
 dlopen = [ "yeslogic-fontconfig-sys/dlopen" ]

@@ -34,17 +34,13 @@ fn main() {
     let mut opts = Opts::parse();
     if opts.version {
         let version = fontconfig::version();
-        let major = version / 10000;
-        let version = version % 10000;
-        let minor = version / 100;
-        let revision = version % 100;
-        eprintln!("fontconfig version {}.{}.{}", major, minor, revision);
+        eprintln!("fontconfig version {}", version);
         return;
     }
 
     let mut os = None;
 
-    let mut pat: fontconfig::Pattern = if let Some(ref pattern) = opts.pattern {
+    let mut pat: fontconfig::OwnedPattern = if let Some(ref pattern) = opts.pattern {
         if !opts.elements.is_empty() {
             let mut objectset = fontconfig::ObjectSet::new();
             for element in opts.elements {
@@ -55,7 +51,7 @@ fn main() {
         }
         pattern.parse().expect("Unable to parse the pattern")
     } else {
-        fontconfig::Pattern::new()
+        fontconfig::OwnedPattern::new()
     };
 
     let mut config = fontconfig::FontConfig::default();

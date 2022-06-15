@@ -45,18 +45,14 @@ fn main() {
 
     if opts.version {
         let version = fontconfig::version();
-        let major = version / 10000;
-        let version = version % 10000;
-        let minor = version / 100;
-        let revision = version % 100;
-        println!("fontconfig version {}.{}.{}", major, minor, revision);
+        println!("fontconfig version {}", version);
         return;
     }
 
     let mut os = None;
 
     let mut pat = if let Some(ref pattern) = opts.pattern {
-        let pat = fontconfig::Pattern::from_str(pattern).expect("Unable to parse the pattern");
+        let pat = fontconfig::OwnedPattern::from_str(pattern).expect("Unable to parse the pattern");
         if !opts.elements.is_empty() {
             let mut objects = fontconfig::ObjectSet::new();
             for element in opts.elements {
@@ -66,7 +62,7 @@ fn main() {
         }
         pat
     } else {
-        fontconfig::Pattern::new()
+        fontconfig::OwnedPattern::new()
     };
 
     let mut config = fontconfig::FontConfig::default();
@@ -76,12 +72,12 @@ fn main() {
     let mut fontset = fontconfig::FontSet::new();
 
     if opts.sort || opts.all {
-        let patterns = pat
+        let mut patterns = pat
             .font_sort(&mut config, !opts.all)
             .expect("No fonts installed on the system");
 
-        for pattern in patterns.iter() {
-            let pat = pat.render_prepare(&pattern);
+        for font in patterns.iter_mut() {
+            let pat = pat.render_prepare(&mut config, font);
             fontset.push(pat);
         }
     } else {
@@ -99,7 +95,6 @@ fn main() {
             }
         });
 
-    //
     for pattern in fontset.iter() {
         let mut font = pattern.filter(os.as_mut()).unwrap();
         if opts.verbose || opts.brief {
@@ -109,8 +104,8 @@ fn main() {
             }
             pattern.print();
         } else {
-            let s = pattern.format(&fmt);
-            println!("{:?}", &s);
+            let s = pattern.format(&fmt).unwrap();
+            println!("{}", s.to_string_lossy());
         }
     }
 }

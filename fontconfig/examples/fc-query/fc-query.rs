@@ -29,11 +29,7 @@ fn main() {
     let opts = Opts::parse();
     if opts.version {
         let version = fontconfig::version();
-        let major = version / 10000;
-        let version = version % 10000;
-        let minor = version / 100;
-        let revision = version % 100;
-        println!("fontconfig version {}.{}.{}", major, minor, revision);
+        println!("fontconfig version {}", version);
         return;
     }
 

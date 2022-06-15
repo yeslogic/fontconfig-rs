@@ -4,7 +4,7 @@ use std::process;
 use clap::Parser;
 
 #[derive(Debug, Clone, Parser)]
-#[clap(name = "fc-list", about = "List fonts matching [pattern]")]
+#[clap(name = "fc-list", about = "List fonts matching")]
 struct Opts {
     /// display entire font pattern verbosely
     #[clap(short, long, action)]
@@ -37,18 +37,14 @@ fn main() {
     let opts = Opts::parse();
     if opts.version {
         let version = fontconfig::version();
-        let major = version / 10000;
-        let version = version % 10000;
-        let minor = version / 100;
-        let revision = version % 100;
-        println!("fontconfig version {}.{}.{}", major, minor, revision);
+        println!("fontconfig version {}", version);
         return;
     }
 
     let mut os = None;
 
     let pat = if let Some(ref pattern) = opts.pattern {
-        let pat: fontconfig::Pattern = pattern.parse().expect("Unable to parse the pattern");
+        let pat: fontconfig::OwnedPattern = pattern.parse().expect("Unable to parse the pattern");
         if !opts.elements.is_empty() {
             let mut objectset = fontconfig::ObjectSet::new();
             for element in opts.elements {
@@ -58,7 +54,7 @@ fn main() {
         }
         pat
     } else {
-        fontconfig::Pattern::new()
+        fontconfig::OwnedPattern::new()
     };
 
     if opts.quiet && os.is_none() {
@@ -81,20 +77,20 @@ fn main() {
     };
 
     let mut config = fontconfig::FontConfig::default();
-    let mut fs = config.font_list(pat, os.as_mut());
+    let mut fs = pat.font_list(&mut config, os.as_mut());
 
     if !opts.quiet && !fs.is_empty() {
-        for mut font in fs.iter_mut() {
+        for font in fs.iter_mut() {
             if opts.verbose || opts.brief {
                 if opts.brief {
                     font.del(fontconfig::FC_CHARSET.as_cstr());
                     font.del(fontconfig::FC_LANG.as_cstr());
                 }
                 font.print();
+            } else if let Some(fmt) = font.format(&format) {
+                println!("{}", fmt.to_string_lossy());
             } else {
-                if let Some(fmt) = font.format(&format) {
-                    println!("{}", fmt.to_string_lossy());
-                }
+                eprintln!("Unable to format font");
             }
         }
     }

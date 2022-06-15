@@ -131,14 +131,15 @@ mod tests {
         let mut config = FontConfig::default();
         let pat = OwnedPattern::new();
         let fonts = pat.font_list(&mut config, None);
-        let ja_fonts: Vec<_> = fonts
-            .iter()
-            .filter(|p| {
-                p.lang_set()
-                    .map_or(false, |langs| langs.langs().iter().any(|l| l == "ja"))
-            })
-            .collect();
-        println!("{:?}", ja_fonts);
-        assert!(!ja_fonts.is_empty());
+        let ja_fonts = fonts.iter().filter(|p| {
+            p.lang_set()
+                .map_or(false, |langs| langs.langs().iter().any(|l| l == "ja"))
+        });
+        assert!(ja_fonts.count() == 0);
+        let en_fonts = fonts.iter().filter(|p| {
+            p.lang_set()
+                .map_or(false, |langs| langs.langs().iter().any(|l| l == "en"))
+        });
+        assert_ne!(en_fonts.count(), 0);
     }
 }

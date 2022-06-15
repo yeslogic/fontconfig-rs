@@ -44,7 +44,6 @@ fn main() {
         if !opts.elements.is_empty() {
             let mut objectset = fontconfig::ObjectSet::new();
             for element in opts.elements {
-                println!("element {}", element);
                 objectset.add(&CString::new(element.to_string()).unwrap());
             }
             os.replace(objectset);
@@ -65,7 +64,6 @@ fn main() {
     }
 
     if os.is_some() {
-        println!("os");
         pat = pat.filter(os.as_mut()).unwrap();
     }
 

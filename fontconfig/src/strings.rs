@@ -36,7 +36,7 @@ impl Deref for FcStr {
     type Target = CStr;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { CStr::from_ptr(self.0.as_ptr() as *const i8) }
+        unsafe { CStr::from_ptr(self.0.as_ptr() as *const _) }
     }
 }
 

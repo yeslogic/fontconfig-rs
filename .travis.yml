@@ -45,16 +45,26 @@ script:
       true
     fi
 
-  - test "$(cargo run --example fc-list)" = "$(fc-list)"
+  - diff -u <(fc-list) <(cargo run --example fc-list)
 
   - |
-    rust_impl="$(cargo run --example fc-list -- --verbose monospace)"
-    test "$(rust_impl)" = "$(fc-list --verbose)"
+    diff -u \
+    <(fc-list --verbose monospace) \
+    <(cargo run --example fc-list -- --verbose monospace)
+
+  # fc-list with file and lang property
+  - |
+    diff -u \
+    <(fc-list monospace file lang) \
+    <(cargo run --example fc-list -- monospace file lang)
+
+  # fc-pattern with ConfigSubstitute and DefaultSubstitute
+  - |
+    diff -u \
+    <(fc-pattern -d -c monospace) \
+    <(cargo run --example fc-pattern -- -d -c monospace)
 
   - |
-    rust_impl="$(cargo run --example fc-pattern -- --verbose monospace)"
-    test "$(rust_impl)" = "$(fc-pattern --verbose monospace)"
-
-  - |
-    rust_impl="$(cargo run --example fc-pattern -- -d -c monospace)"
-    test "$(rust_impl)" = "$(fc-pattern -d -c monospace)"
+    diff -u \
+    <(fc-pattern monospace) \
+    <(cargo run --example fc-pattern -- monospace)

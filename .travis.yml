@@ -17,6 +17,8 @@ before_install:
   - sudo apt-get -y install libfontconfig1-dev jq
 
 script:
+  - cargo clippy
+
   - cargo test
   - |
     if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
@@ -41,3 +43,17 @@ script:
     else
       true
     fi
+
+  - test "$(cargo run --example fc-list)" = "$(fc-list)"
+
+  - |
+    rust_impl="$(cargo run --example fc-list -- --verbose monospace)"
+    test "$(rust_impl)" = "$(fc-list --verbose)"
+
+  - |
+    rust_impl="$(cargo run --example fc-pattern -- --verbose monospace)"
+    test "$(rust_impl)" = "$(fc-pattern --verbose monospace)"
+
+  - |
+    rust_impl="$(cargo run --example fc-pattern -- -d -c monospace)"
+    test "$(rust_impl)" = "$(fc-pattern -d -c monospace)"

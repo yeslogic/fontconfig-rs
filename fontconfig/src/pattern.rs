@@ -23,11 +23,15 @@ use crate::{
     ObjectSet, Result, ToResult,
 };
 
-/// Representation of a borrowed fontconfig's `FcPattern`.
+/// Representation of a borrowed fontconfig's [`sys::FcPattern`].
+///
+/// An `Pattern` is an opaque type that holds both patterns to match against the available fonts, as well as the information about each font.
+#[doc(alias = "FcPattern")]
 #[repr(transparent)]
 pub struct Pattern(FcPattern);
 
-/// A type representing an owned fontconfig's `FcPattern`.
+/// A type representing an owned fontconfig's [`sys::FcPattern`].
+#[doc(alias = "FcPattern")]
 #[repr(transparent)]
 pub struct OwnedPattern {
     /// Raw pointer to `FcPattern`
@@ -35,7 +39,7 @@ pub struct OwnedPattern {
 }
 
 impl OwnedPattern {
-    /// Create a new empty `Pattern`.
+    /// Create a new empty [`OwnedPattern`].
     pub fn new() -> OwnedPattern {
         let pat = unsafe { ffi_dispatch!(LIB, FcPatternCreate,) };
         assert!(!pat.is_null());
@@ -47,7 +51,7 @@ impl OwnedPattern {
 
     pub(crate) fn into_inner(self) -> *mut FcPattern {
         let ptr = self.pat.as_ptr() as *mut FcPattern;
-        unsafe { ffi_dispatch!(LIB, FcPatternReference, ptr) }
+        std::mem::forget(self);
         ptr
     }
 }
@@ -55,9 +59,7 @@ impl OwnedPattern {
 impl Pattern {
     /// Add a key-value pair to this pattern.
     ///
-    /// See useful keys in the [fontconfig reference][1].
-    ///
-    /// [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html
+    /// See useful keys in the [fontconfig reference](http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html)
     pub fn add_string(&mut self, name: &CStr, val: &CStr) {
         unsafe {
             ffi_dispatch!(
@@ -119,8 +121,8 @@ impl Pattern {
 
     /// Filter the objects of pattern
     ///
-    /// Returns a new pattern that only has those objects from p that are in os.
-    /// If os is None, a duplicate of p is returned.
+    /// Returns a new pattern that only has those objects from `self` that are in os.
+    /// If os is None, a duplicate of `self` is returned.
     pub fn filter(&self, os: Option<&mut ObjectSet>) -> Option<OwnedPattern> {
         let os = os.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
         let pat = unsafe {
@@ -135,7 +137,7 @@ impl Pattern {
 
     /// Format a pattern into a string according to a format specifier
     ///
-    /// See [pattern-format](https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcpatternformat.html)
+    /// See: [pattern-format](https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcpatternformat.html)
     pub fn format(&self, fmt: &CStr) -> Option<FcStr> {
         unsafe {
             let s = ffi_dispatch!(
@@ -152,9 +154,9 @@ impl Pattern {
     ///
     /// Supplies default values for underspecified font patterns:
     ///
-    /// * Patterns without a specified style or weight are set to Medium
-    /// * Patterns without a specified style or slant are set to Roman
-    /// * Patterns without a specified pixel size are given one computed from any specified point size (default 12), dpi (default 75) and scale (default 1).
+    /// * Patterns without a specified style or weight are set to Medium   
+    /// * Patterns without a specified style or slant are set to Roman   
+    /// * Patterns without a specified pixel size are given one computed from any specified point size (default 12), dpi (default 75) and scale (default 1).  
     pub fn default_substitute(&mut self) {
         unsafe {
             ffi_dispatch!(LIB, FcDefaultSubstitute, self.as_mut_ptr());
@@ -163,8 +165,8 @@ impl Pattern {
 
     /// Get the best available match for this pattern, returned as a new pattern.
     ///
-    /// Finds the font in sets most closely matching pattern and returns the result of `render_prepare` for that font and the provided pattern.
-    /// This function should be called only after `FontConfig::substitute` and `default_substitute` have been called for the pattern.
+    /// Finds the font in sets most closely matching pattern and returns the result of [`Pattern::render_prepare`] for that font and the provided pattern.   
+    /// This function should be called only after [`FontConfig::substitute`] and [`Pattern::default_substitute`] have been called for the pattern.    
     /// otherwise the results will not be correct.
     #[doc(alias = "FcFontMatch")]
     pub fn font_match(&mut self, config: &mut FontConfig) -> OwnedPattern {
@@ -189,9 +191,8 @@ impl Pattern {
 
     /// List fonts
     ///
-    /// Selects fonts matching p,
-    /// creates patterns from those fonts containing only the objects in os and returns the set of unique such patterns.
-    /// If config is NULL, the default configuration is checked to be up to date, and used.
+    /// Selects fonts matching `self`,
+    /// creates patterns from those fonts containing only the objects in os and returns the set of unique such patterns.    
     pub fn font_list(&self, config: &mut FontConfig, os: Option<&mut ObjectSet>) -> FontSet<'_> {
         let os = os.map(|o| o.as_mut_ptr()).unwrap_or(ptr::null_mut());
         let set = unsafe {
@@ -212,9 +213,8 @@ impl Pattern {
 
     /// Get the list of fonts sorted by closeness to self.
     ///
-    /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
-    /// The union of Unicode coverage of all of the fonts is returned in csp, if csp is not None.
-    /// This function should be called only after `FontConfig::substitute` and `default_substitute` have been called for this pattern;
+    /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.    
+    /// This function should be called only after [`FontConfig::substitute`] and [`Pattern::default_substitute`] have been called for this pattern;    
     /// otherwise the results will not be correct.
     pub fn font_sort(&mut self, config: &mut FontConfig, trim: bool) -> Result<FontSet<'static>> {
         unsafe {
@@ -247,9 +247,9 @@ impl Pattern {
 
     /// Get the list of fonts sorted by closeness to self.
     ///
-    /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
-    /// The union of Unicode coverage of all of the fonts is returned in csp, if csp is not None.
-    /// This function should be called only after `FontConfig::substitute` and `default_substitute` have been called for this pattern;
+    /// If trim is `true`, elements in the list which don't include Unicode coverage not provided by earlier elements in the list are elided.    
+    /// The union of Unicode coverage of all of the fonts is returned in [`CharSet`].   
+    /// This function should be called only after [`FontConfig::substitute`] and [`Pattern::default_substitute`] have been called for this pattern;    
     /// otherwise the results will not be correct.
     pub fn font_sort_with_charset(
         &mut self,
@@ -291,8 +291,8 @@ impl Pattern {
     /// Prepare pattern for loading font file.
     ///
     /// Creates a new pattern consisting of elements of font not appearing in pat,
-    /// elements of pat not appearing in font and the best matching value from pat for elements appearing in both.
-    /// The result is passed to FcConfigSubstituteWithPat with kind FcMatchFont and then returned.
+    /// elements of pat not appearing in font and the best matching value from pat for elements appearing in both.    
+    /// The result is passed to [`FontConfig::substitute_with_pat`] with kind [`crate::MatchKind::Font`] and then returned.
     #[doc(alias = "FcFontRenderPrepare")]
     pub fn render_prepare(&mut self, config: &mut FontConfig, font: &mut Self) -> OwnedPattern {
         let pat = unsafe {
@@ -371,13 +371,13 @@ impl Pattern {
             .and_then(|format| format.parse())
     }
 
-    /// Returns a raw pointer to underlying `FcPattern`.
-    pub fn as_ptr(&self) -> *const FcPattern {
+    /// Returns a raw pointer to underlying [`sys::FcPattern`].
+    pub(crate) fn as_ptr(&self) -> *const FcPattern {
         self as *const _ as *const FcPattern
     }
 
-    /// Returns an unsafe mutable pointer to the underlying `FcPattern`.
-    pub fn as_mut_ptr(&mut self) -> *mut FcPattern {
+    /// Returns an unsafe mutable pointer to the underlying [`sys::FcPattern`].
+    pub(crate) fn as_mut_ptr(&mut self) -> *mut FcPattern {
         self as *mut _ as *mut FcPattern
     }
 }
@@ -462,6 +462,18 @@ impl DerefMut for OwnedPattern {
     }
 }
 
+impl AsRef<Pattern> for OwnedPattern {
+    fn as_ref(&self) -> &Pattern {
+        self
+    }
+}
+
+impl AsMut<Pattern> for OwnedPattern {
+    fn as_mut(&mut self) -> &mut Pattern {
+        self
+    }
+}
+
 impl Pattern {
     /// Get the languages set of this pattern.
     pub fn lang_set(&self) -> Option<LangSet> {
@@ -502,7 +514,9 @@ impl Pattern {
 
 impl Default for OwnedPattern {
     fn default() -> Self {
-        OwnedPattern::new()
+        let mut pat = OwnedPattern::new();
+        pat.default_substitute();
+        pat
     }
 }
 

@@ -10,9 +10,13 @@ use sys::statics::LIB;
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
-use crate::{Blanks, FcTrue, OwnedPattern, Pattern};
+#[allow(deprecated)]
+use crate::Blanks;
+
+use crate::{FcTrue, OwnedPattern, Pattern};
 
 /// Wrapper around `FcFontSet`.
+#[doc(alias = "FcFontSet")]
 #[repr(transparent)]
 pub struct FontSet<'pat> {
     pub(crate) fcset: NonNull<sys::FcFontSet>,
@@ -20,7 +24,8 @@ pub struct FontSet<'pat> {
 }
 
 impl<'pat> FontSet<'pat> {
-    /// Create a new, empty `FontSet`.
+    /// Create an empty [`FontSet`].
+    #[doc(alias = "FcFontSetCreate")]
     pub fn new() -> FontSet<'pat> {
         let fcset = unsafe { ffi_dispatch!(LIB, FcFontSetCreate,) };
         FontSet {
@@ -29,7 +34,7 @@ impl<'pat> FontSet<'pat> {
         }
     }
 
-    /// Add a `Pattern` to this `FontSet`.
+    /// Add a [`Pattern`] to this [`FontSet`].
     #[doc(alias = "FcFontSetAdd")]
     pub fn push(&mut self, pat: OwnedPattern) {
         unsafe {
@@ -40,22 +45,24 @@ impl<'pat> FontSet<'pat> {
         }
     }
 
-    /// How many fonts are in this `FontSet`
+    /// How many fonts are in this [`FontSet`]
+    #[doc(alias = "FcFontSet->nfont")]
     pub fn len(&self) -> usize {
         unsafe { (*self.as_ptr()).nfont as _ }
     }
 
-    /// If there are no fonts in this `FontSet`, return `true`.
+    /// If there are no fonts in this [`FontSet`], return `true`.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Print this `FontSet` to stdout.
+    /// Print this [`FontSet`] to stdout.
+    #[doc(alias = "FcFontSetPrint")]
     pub fn print(&mut self) {
         unsafe { ffi_dispatch!(LIB, FcFontSetPrint, self.as_mut_ptr()) };
     }
 
-    /// Iterate the fonts (as `Patterns`) in this `FontSet`.
+    /// Iterate the fonts (as `Patterns`) in this [`FontSet`].
     pub fn iter<'fs>(&'fs self) -> Iter<'fs, 'pat> {
         Iter {
             fcset: self,
@@ -63,7 +70,7 @@ impl<'pat> FontSet<'pat> {
         }
     }
 
-    /// Iterate the fonts (as `Patterns`) in this `FontSet`.
+    /// Iterate the fonts (as `Patterns`) in this [`FontSet`].
     pub fn iter_mut<'fs>(&'fs mut self) -> IterMut<'fs, 'pat> {
         IterMut {
             fcset: self,
@@ -78,7 +85,9 @@ impl<'pat> FontSet<'pat> {
     /// Otherwise, this function works exactly like FcFreeTypeQuery().
     /// The number of faces in 'file' is returned in 'count'.
     /// The number of patterns added to 'set' is returned.
-    /// FcBlanks is deprecated, blanks is ignored and accepted only for compatibility with older code.
+    /// [`Blanks`] is deprecated, blanks is ignored and accepted only for compatibility with older code.
+    #[doc(alias = "FcFreeTypeQuery")]
+    #[allow(deprecated)]
     pub fn freetype_query_all(
         &mut self,
         _file: &std::path::Path,
@@ -125,7 +134,7 @@ impl Drop for FontSet<'_> {
     }
 }
 
-#[doc(hidden)]
+/// Iterator over the fonts in a [`FontSet`].
 pub struct Iter<'fs, 'pat> {
     fcset: &'fs FontSet<'pat>,
     index: usize,
@@ -155,7 +164,7 @@ impl<'fs, 'pat> Iterator for Iter<'fs, 'pat> {
     }
 }
 
-#[doc(hidden)]
+/// Iterator over the fonts in a [`FontSet`].
 pub struct IterMut<'fs, 'pat> {
     fcset: &'fs mut FontSet<'pat>,
     index: usize,

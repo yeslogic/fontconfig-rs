@@ -72,6 +72,7 @@ pub mod pattern;
 pub mod strings;
 pub mod stringset;
 
+#[allow(deprecated)]
 pub use blanks::Blanks;
 pub use charset::CharSet;
 pub use fontset::FontSet;
@@ -92,12 +93,12 @@ type Result<T> = std::result::Result<T, Error>;
 static INITIALIZED: once_cell::sync::Lazy<Arc<Mutex<usize>>> =
     once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(0)));
 
-/// Error type returned from Pattern::format.
 ///
-/// The error holds the name of the unknown format.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// The format is not known.
+    /// Error type returned from Pattern::format.
+    // The error holds the name of the unknown format.
     #[error("Unknown format {0}")]
     UnknownFontFormat(String),
     /// Out of memory error.

@@ -12,7 +12,7 @@ use sys::*;
 
 use crate::FcTrue;
 
-/// An Matrix holds an affine transformation, usually used to reshape glyphs.
+/// An Matrix holds an affine transformation, usually used to reshape glyphs.   
 /// A small set of matrix operations are provided to manipulate these.
 #[doc(alias = "FcMatrix")]
 #[derive(Clone)]
@@ -22,6 +22,7 @@ pub struct Matrix {
 
 impl Matrix {
     /// Initialize an Matrix to the identity matrix.
+    #[inline]
     pub fn new() -> Matrix {
         let matrix = Box::new(sys::FcMatrix {
             xx: 1.,
@@ -34,16 +35,20 @@ impl Matrix {
 
     /// Rotate a matrix
     ///
-    /// Rotates matrix by the angle who's sine is sin and cosine is cos.
+    /// Rotates matrix by the angle who's sine is sin and cosine is cos.  
     /// This is done by multiplying by the matrix:
+    #[doc(alias = "FcMatrixRotate")]
+    #[inline]
     pub fn rotate(&mut self, cos: f64, sin: f64) {
         unsafe { ffi_dispatch!(LIB, FcMatrixRotate, self.as_mut_ptr(), cos, sin) };
     }
 
     /// Scale a matrix
     ///
-    /// Multiplies matrix x values by sx and y values by dy.
+    /// Multiplies matrix x values by sx and y values by dy.  
     /// This is done by multiplying by the matrix:
+    #[doc(alias = "FcMatrixScale")]
+    #[inline]
     pub fn scale(&mut self, sx: f64, dy: f64) {
         unsafe {
             ffi_dispatch!(LIB, FcMatrixScale, self.as_mut_ptr(), sx, dy);
@@ -52,10 +57,32 @@ impl Matrix {
 
     /// Shear a matrix
     ///
-    /// Shears matrix horizontally by sh and vertically by sv.
+    /// Shears matrix horizontally by sh and vertically by sv.  
     /// This is done by multiplying by the matrix:
+    #[doc(alias = "FcMatrixShear")]
+    #[inline]
     pub fn shear(&mut self, sh: f64, sv: f64) {
         unsafe { ffi_dispatch!(LIB, FcMatrixShear, self.as_mut_ptr(), sh, sv) };
+    }
+
+    /// `xx` field.
+    pub fn xx(&self) -> f64 {
+        self.matrix.xx
+    }
+
+    /// `xy` field.
+    pub fn xy(&self) -> f64 {
+        self.matrix.xy
+    }
+
+    /// `yx` field
+    pub fn yx(&self) -> f64 {
+        self.matrix.yx
+    }
+
+    /// `yy` field
+    pub fn yy(&self) -> f64 {
+        self.matrix.yy
     }
 
     pub(crate) fn as_ptr(&self) -> *const sys::FcMatrix {

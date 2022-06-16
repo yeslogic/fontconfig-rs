@@ -43,20 +43,6 @@ impl<'a> CharSet<'a> {
         res == FcTrue
     }
 
-    /// Merge self with other `CharSet`.
-    pub fn merge(&mut self, other: &Self) {
-        let res = unsafe {
-            ffi_dispatch!(
-                LIB,
-                FcCharSetMerge,
-                self.as_mut_ptr(),
-                other.as_ptr(),
-                ptr::null_mut()
-            )
-        };
-        assert_eq!(res, FcTrue);
-    }
-
     /// Intersect self with other `CharSet`.
     pub fn intersect(&self, other: &Self) -> Self {
         let fcset =
@@ -114,6 +100,20 @@ impl CharSet<'static> {
         let res = unsafe { ffi_dispatch!(LIB, FcCharSetDelChar, self.as_mut_ptr(), c as u32) };
         assert_eq!(res, FcTrue);
     }
+
+    /// Merge self with other `CharSet`.
+    pub fn merge(&mut self, other: &Self) {
+        let res = unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcCharSetMerge,
+                self.as_mut_ptr(),
+                other.as_ptr(),
+                ptr::null_mut()
+            )
+        };
+        assert_eq!(res, FcTrue);
+    }
 }
 
 impl<'a> PartialEq for CharSet<'a> {
@@ -130,15 +130,16 @@ impl<'a> PartialEq for CharSet<'a> {
     }
 }
 
-impl<'a> Clone for CharSet<'a> {
-    fn clone(&self) -> CharSet<'a> {
-        let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCopy, self.fcset.as_ptr()) };
-        CharSet {
-            fcset: NonNull::new(fcset).expect("Can't clone CharSet"),
-            _marker: PhantomData,
-        }
-    }
-}
+// NOTE: This just add reference, it is not safe.
+// impl<'a> Clone for CharSet<'a> {
+//     fn clone(&self) -> CharSet<'a> {
+//         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCopy, self.fcset.as_ptr()) };
+//         CharSet {
+//             fcset: NonNull::new(fcset).expect("Can't clone CharSet"),
+//             _marker: PhantomData,
+//         }
+//     }
+// }
 
 impl Drop for CharSet<'_> {
     fn drop(&mut self) {

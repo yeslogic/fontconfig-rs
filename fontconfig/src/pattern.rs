@@ -491,8 +491,8 @@ impl Pattern {
     }
 
     /// Get the matrix from this pattern.
-    pub fn matrix(&mut self) -> Option<Matrix> {
-        let mut matrix = Matrix::new();
+    pub fn matrix(&mut self) -> Option<&Matrix> {
+        let mut matrix = ptr::null_mut();
         unsafe {
             ffi_dispatch!(
                 LIB,
@@ -500,9 +500,14 @@ impl Pattern {
                 self.as_mut_ptr(),
                 FC_MATRIX.as_ptr(),
                 0,
-                &mut matrix.as_mut_ptr()
+                &mut matrix
             )
             .opt()?;
+            if matrix.is_null() {
+                None
+            } else {
+                Some(&*(matrix as *mut crate::Matrix))
+            }
         }
         Some(matrix)
     }

@@ -15,21 +15,22 @@ use crate::FcTrue;
 /// An Matrix holds an affine transformation, usually used to reshape glyphs.   
 /// A small set of matrix operations are provided to manipulate these.
 #[doc(alias = "FcMatrix")]
+#[repr(transparent)]
 #[derive(Clone)]
 pub struct Matrix {
-    matrix: Box<sys::FcMatrix>,
+    pub(crate) matrix: sys::FcMatrix,
 }
 
 impl Matrix {
     /// Initialize an Matrix to the identity matrix.
     #[inline]
     pub fn new() -> Matrix {
-        let matrix = Box::new(sys::FcMatrix {
+        let matrix = sys::FcMatrix {
             xx: 1.,
             xy: 0.,
             yx: 0.,
             yy: 1.,
-        });
+        };
         Matrix { matrix }
     }
 
@@ -40,7 +41,7 @@ impl Matrix {
     #[doc(alias = "FcMatrixRotate")]
     #[inline]
     pub fn rotate(&mut self, cos: f64, sin: f64) {
-        unsafe { ffi_dispatch!(LIB, FcMatrixRotate, self.as_mut_ptr(), cos, sin) };
+        unsafe { ffi_dispatch!(LIB, FcMatrixRotate, &mut self.matrix, cos, sin) };
     }
 
     /// Scale a matrix
@@ -51,7 +52,7 @@ impl Matrix {
     #[inline]
     pub fn scale(&mut self, sx: f64, dy: f64) {
         unsafe {
-            ffi_dispatch!(LIB, FcMatrixScale, self.as_mut_ptr(), sx, dy);
+            ffi_dispatch!(LIB, FcMatrixScale, &mut self.matrix, sx, dy);
         }
     }
 
@@ -62,7 +63,7 @@ impl Matrix {
     #[doc(alias = "FcMatrixShear")]
     #[inline]
     pub fn shear(&mut self, sh: f64, sv: f64) {
-        unsafe { ffi_dispatch!(LIB, FcMatrixShear, self.as_mut_ptr(), sh, sv) };
+        unsafe { ffi_dispatch!(LIB, FcMatrixShear, &mut self.matrix, sh, sv) };
     }
 
     /// `xx` field.
@@ -84,19 +85,11 @@ impl Matrix {
     pub fn yy(&self) -> f64 {
         self.matrix.yy
     }
-
-    pub(crate) fn as_ptr(&self) -> *const sys::FcMatrix {
-        &*self.matrix
-    }
-
-    pub(crate) fn as_mut_ptr(&mut self) -> *mut sys::FcMatrix {
-        &mut *self.matrix
-    }
 }
 
 impl PartialEq for Matrix {
     fn eq(&self, other: &Self) -> bool {
-        FcTrue == unsafe { ffi_dispatch!(LIB, FcMatrixEqual, self.as_ptr(), other.as_ptr()) }
+        FcTrue == unsafe { ffi_dispatch!(LIB, FcMatrixEqual, &self.matrix, &other.matrix) }
     }
 }
 
@@ -109,12 +102,19 @@ impl Mul<Matrix> for Matrix {
             ffi_dispatch!(
                 LIB,
                 FcMatrixMultiply,
-                matrix.as_mut_ptr(),
-                self.as_ptr(),
-                other.as_ptr()
+                &mut matrix.matrix,
+                &self.matrix,
+                &other.matrix
             )
         };
         matrix
+    }
+}
+
+#[doc(hidden)]
+impl From<sys::FcMatrix> for Matrix {
+    fn from(matrix: sys::FcMatrix) -> Self {
+        Matrix { matrix }
     }
 }
 

@@ -18,6 +18,7 @@ use sys::*;
 use sys::constants::*;
 use sys::{ffi_dispatch, FcPattern};
 
+use crate::charset::OwnedCharSet;
 use crate::{
     CharSet, Error, FcFalse, FcStr, FcTrue, FontConfig, FontFormat, FontSet, LangSet, Matrix,
     ObjectSet, Result, ToResult,
@@ -255,7 +256,7 @@ impl Pattern {
         &mut self,
         config: &mut FontConfig,
         trim: bool,
-    ) -> Option<(FontSet<'_>, CharSet<'static>)> {
+    ) -> Option<(FontSet<'_>, OwnedCharSet)> {
         // self.default_substitute();
         // config.substitute(self, MatchKind::Pattern);
         unsafe {
@@ -280,9 +281,8 @@ impl Pattern {
                     fcset: NonNull::new(fcset).unwrap(),
                     _marker: PhantomData,
                 },
-                CharSet {
+                OwnedCharSet {
                     fcset: NonNull::new(charsets).unwrap(),
-                    _marker: PhantomData,
                 },
             ))
         }
@@ -311,7 +311,7 @@ impl Pattern {
 
     /// Get character map
     #[doc(alias = "FcPatternGetCharSet")]
-    pub fn charset(&self) -> Option<CharSet> {
+    pub fn charset(&self) -> Option<&CharSet> {
         unsafe {
             let mut charsets = ffi_dispatch!(LIB, FcCharSetCreate,);
             ffi_dispatch!(
@@ -325,11 +325,7 @@ impl Pattern {
             if charsets.is_null() {
                 None
             } else {
-                let charsets = ffi_dispatch!(LIB, FcCharSetCopy, charsets);
-                NonNull::new(charsets).map(|fcset| CharSet {
-                    fcset,
-                    _marker: PhantomData,
-                })
+                Some(&*(charsets as *const CharSet))
             }
         }
     }

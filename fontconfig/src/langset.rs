@@ -1,6 +1,6 @@
 //!
 use std::ffi::CStr;
-use std::marker::PhantomData;
+
 use std::ptr::NonNull;
 
 use fontconfig_sys as sys;
@@ -126,11 +126,10 @@ impl LangSet {
 
     /// Get character map for a language
     #[doc(alias = "FcLangGetCharSet")]
-    pub fn charset(lang: &CStr) -> CharSet<'_> {
-        let charset = unsafe { ffi_dispatch!(LIB, FcLangGetCharSet, lang.as_ptr() as *const _) };
-        CharSet {
-            fcset: NonNull::new(charset).unwrap(),
-            _marker: PhantomData,
+    pub fn charset(lang: &CStr) -> &CharSet {
+        unsafe {
+            let charset = ffi_dispatch!(LIB, FcLangGetCharSet, lang.as_ptr() as *const _);
+            &*(charset as *const CharSet)
         }
     }
 

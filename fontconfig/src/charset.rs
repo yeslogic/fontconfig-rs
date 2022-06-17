@@ -1,6 +1,6 @@
 //!
 
-use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::ptr::{self, NonNull};
 
 use fontconfig_sys as sys;
@@ -14,12 +14,17 @@ use sys::*;
 use crate::FcTrue;
 
 /// Wrapper around `FcCharSet`.
-pub struct CharSet<'a> {
+pub struct OwnedCharSet {
     pub(crate) fcset: NonNull<sys::FcCharSet>,
-    pub(crate) _marker: PhantomData<&'a sys::FcCharSet>,
 }
 
-impl<'a> CharSet<'a> {
+/// Wrapper around `FcCharSet`.
+#[repr(transparent)]
+pub struct CharSet {
+    pub(crate) fcset: sys::FcCharSet,
+}
+
+impl CharSet {
     /// Count entries in a charset
     pub fn len(&self) -> usize {
         let size = unsafe { ffi_dispatch!(LIB, FcCharSetCount, self.as_ptr()) };
@@ -44,49 +49,45 @@ impl<'a> CharSet<'a> {
     }
 
     /// Intersect self with other `CharSet`.
-    pub fn intersect(&self, other: &Self) -> Self {
+    pub fn intersect(&self, other: &Self) -> OwnedCharSet {
         let fcset =
             unsafe { ffi_dispatch!(LIB, FcCharSetIntersect, self.as_ptr(), other.as_ptr()) };
-        Self {
+        OwnedCharSet {
             fcset: NonNull::new(fcset).expect("intersect failed"),
-            _marker: PhantomData,
         }
     }
 
     /// Subtract other `CharSet` from self.
-    pub fn subtract(&self, other: &Self) -> Self {
+    pub fn subtract(&self, other: &Self) -> OwnedCharSet {
         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetSubtract, self.as_ptr(), other.as_ptr()) };
-        Self {
+        OwnedCharSet {
             fcset: NonNull::new(fcset).expect("subtract failed"),
-            _marker: PhantomData,
         }
     }
 
     /// Union self with other `CharSet`.
-    pub fn union(&self, other: &Self) -> Self {
+    pub fn union(&self, other: &Self) -> OwnedCharSet {
         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetUnion, self.as_ptr(), other.as_ptr()) };
-        Self {
+        OwnedCharSet {
             fcset: NonNull::new(fcset).expect("union failed"),
-            _marker: PhantomData,
         }
     }
 
     fn as_ptr(&self) -> *const sys::FcCharSet {
-        self.fcset.as_ptr()
+        &self.fcset
     }
 
     pub(crate) fn as_mut_ptr(&mut self) -> *mut sys::FcCharSet {
-        self.fcset.as_ptr()
+        &mut self.fcset
     }
 }
 
-impl CharSet<'static> {
+impl OwnedCharSet {
     /// Create a new, empty `CharSet`.
-    pub fn new() -> CharSet<'static> {
+    pub fn new() -> Self {
         let fcset = unsafe { ffi_dispatch!(LIB, FcCharSetCreate,) };
-        CharSet {
+        OwnedCharSet {
             fcset: NonNull::new(fcset).unwrap(),
-            _marker: PhantomData,
         }
     }
     /// Add a character to the `CharSet`.
@@ -116,16 +117,9 @@ impl CharSet<'static> {
     }
 }
 
-impl<'a> PartialEq for CharSet<'a> {
+impl PartialEq for CharSet {
     fn eq(&self, other: &Self) -> bool {
-        let res = unsafe {
-            ffi_dispatch!(
-                LIB,
-                FcCharSetEqual,
-                self.fcset.as_ptr(),
-                other.fcset.as_ptr()
-            )
-        };
+        let res = unsafe { ffi_dispatch!(LIB, FcCharSetEqual, self.as_ptr(), other.as_ptr()) };
         res == FcTrue
     }
 }
@@ -141,14 +135,39 @@ impl<'a> PartialEq for CharSet<'a> {
 //     }
 // }
 
-impl Drop for CharSet<'_> {
+impl Drop for OwnedCharSet {
     fn drop(&mut self) {
         unsafe { ffi_dispatch!(LIB, FcCharSetDestroy, self.as_mut_ptr()) };
     }
 }
 
-impl Default for CharSet<'static> {
+impl Default for OwnedCharSet {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Deref for OwnedCharSet {
+    type Target = CharSet;
+    fn deref(&self) -> &CharSet {
+        unsafe { &*(self.fcset.as_ptr() as *const CharSet) }
+    }
+}
+
+impl DerefMut for OwnedCharSet {
+    fn deref_mut(&mut self) -> &mut CharSet {
+        unsafe { &mut *(self.fcset.as_ptr() as *mut CharSet) }
+    }
+}
+
+impl AsRef<CharSet> for OwnedCharSet {
+    fn as_ref(&self) -> &CharSet {
+        self
+    }
+}
+
+impl AsMut<CharSet> for OwnedCharSet {
+    fn as_mut(&mut self) -> &mut CharSet {
+        self
     }
 }

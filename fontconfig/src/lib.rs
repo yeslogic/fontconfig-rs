@@ -26,7 +26,7 @@
 //!
 //! let mut config = FontConfig::default();
 //! // `FontConfig::find()` returns `Option` (will rarely be `None` but still could be)
-//! let font = config.find("freeserif", None).unwrap();
+//! let font = config.find("freeserif".to_string(), None).unwrap();
 //! // `name` is a `String`, `path` is a `Path`
 //! println!("Name: {}\nPath: {}", font.name, font.path.display());
 //! ```
@@ -52,8 +52,6 @@ use sys::statics::{LIB, LIB_RESULT};
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
-use std::ffi::CString;
-
 use std::path::PathBuf;
 use std::ptr::{self, NonNull};
 use std::str::FromStr;
@@ -74,12 +72,14 @@ pub mod stringset;
 
 #[allow(deprecated)]
 pub use blanks::Blanks;
-pub use charset::CharSet;
+pub use charset::{CharSet, OwnedCharSet};
 pub use fontset::FontSet;
 pub use langset::{LangSet, LangSetCmp};
 pub use matrix::Matrix;
 pub use objectset::ObjectSet;
-pub use pattern::{OwnedPattern, Pattern};
+pub use pattern::{
+    attributes, attributes::Attribute, attributes::AttributeType, OwnedPattern, Pattern,
+};
 pub use strings::FcStr;
 pub use stringset::StringSet;
 
@@ -280,14 +280,13 @@ impl FontConfig {
 
     /// Find a font of the given `family` (e.g. Dejavu Sans, FreeSerif),
     /// optionally filtering by `style`. Both fields are case-insensitive.
-    pub fn find(&mut self, family: &str, style: Option<&str>) -> Option<Font> {
+    pub fn find(&mut self, family: String, style: Option<String>) -> Option<Font> {
         let mut pat = OwnedPattern::new();
-        let family = CString::new(family).ok()?;
-        pat.add_string(FC_FAMILY.as_cstr(), &family);
+        pat.add(&attributes::FC_FAMILY, family);
 
         if let Some(style) = style {
-            let style = CString::new(style).ok()?;
-            pat.add_string(FC_STYLE.as_cstr(), &style);
+            let style = style;
+            pat.add(&attributes::FC_STYLE, style);
         }
 
         let font_match = pat.font_match(self);
@@ -333,7 +332,7 @@ impl Drop for FontConfig {
 /// use fontconfig::{Font, FontConfig};
 ///
 /// let mut config = FontConfig::default();
-/// let font = config.find("sans-serif", Some("italic")).unwrap();
+/// let font = config.find("sans-serif".to_string(), Some("italic".to_string())).unwrap();
 /// println!("Name: {}\nPath: {}", font.name, font.path.display());
 /// ```
 pub struct Font {
@@ -413,9 +412,12 @@ mod tests {
     #[test]
     fn find_font() {
         let mut config = FontConfig::default();
-        config.find("dejavu sans", None).unwrap().print_debug();
         config
-            .find("dejavu sans", Some("oblique"))
+            .find("dejavu sans".to_string(), None)
+            .unwrap()
+            .print_debug();
+        config
+            .find("dejavu sans".to_string(), Some("oblique".to_string()))
             .unwrap()
             .print_debug();
     }
@@ -437,8 +439,8 @@ mod tests {
     fn iter_lang_set() {
         let mut config = FontConfig::default();
         let mut pat = OwnedPattern::new();
-        let family = CString::new("dejavu sans").unwrap();
-        pat.add_string(FC_FAMILY.as_cstr(), &family);
+        let family = "dejavu sans".to_string();
+        pat.add(&attributes::FC_FAMILY, family);
         let pattern = pat.font_match(&mut config);
         for lang in pattern.lang_set().unwrap().langs().iter() {
             println!("{:?}", lang);
@@ -467,8 +469,8 @@ mod tests {
     fn iter_font_sort() {
         let mut config = FontConfig::default();
         let mut pat = OwnedPattern::new();
-        let family = CString::new("dejavu sans").unwrap();
-        pat.add_string(FC_FAMILY.as_cstr(), &family);
+        let family = "dejavu sans".to_owned();
+        pat.add(&attributes::FC_FAMILY, family);
         pat.default_substitute();
         config.substitute(&mut pat, MatchKind::Pattern);
         let font_set = pat.font_sort(&mut config, false).unwrap();

@@ -73,7 +73,7 @@ impl CharSet {
         }
     }
 
-    fn as_ptr(&self) -> *const sys::FcCharSet {
+    pub(crate) fn as_ptr(&self) -> *const sys::FcCharSet {
         &self.fcset
     }
 

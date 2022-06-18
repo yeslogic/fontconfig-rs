@@ -58,59 +58,9 @@ impl OwnedPattern {
 }
 
 impl Pattern {
-    /// Add a key-value pair to this pattern.
-    ///
-    /// See useful keys in the [fontconfig reference](http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html)
-    pub fn add_string(&mut self, name: &CStr, val: &CStr) {
-        unsafe {
-            ffi_dispatch!(
-                LIB,
-                FcPatternAddString,
-                self.as_mut_ptr(),
-                name.as_ptr(),
-                val.as_ptr() as *const u8
-            );
-        }
-    }
-
     /// Delete a property from a pattern
     pub fn del(&mut self, name: &CStr) -> bool {
         FcTrue == unsafe { ffi_dispatch!(LIB, FcPatternDel, self.as_mut_ptr(), name.as_ptr()) }
-    }
-
-    /// Get string the value for a key from this pattern.
-    pub fn string<'a>(&'a self, name: &'a CStr) -> Option<&'a str> {
-        unsafe {
-            let mut ret: *mut sys::FcChar8 = ptr::null_mut();
-            ffi_dispatch!(
-                LIB,
-                FcPatternGetString,
-                self.as_ptr() as *mut FcPattern,
-                name.as_ptr(),
-                0,
-                &mut ret as *mut _
-            )
-            .opt()?;
-            let cstr = CStr::from_ptr(ret as *const c_char);
-            Some(cstr.to_str().unwrap())
-        }
-    }
-
-    /// Get the integer value for a key from this pattern.
-    pub fn int(&self, name: &CStr) -> Option<i32> {
-        unsafe {
-            let mut ret: i32 = 0;
-            ffi_dispatch!(
-                LIB,
-                FcPatternGetInteger,
-                self.as_ptr() as *mut FcPattern,
-                name.as_ptr(),
-                0,
-                &mut ret as *mut i32
-            )
-            .opt()?;
-            Some(ret)
-        }
     }
 
     /// Print this pattern to stdout with all its values.
@@ -332,37 +282,37 @@ impl Pattern {
 
     /// Get the "fullname" (human-readable name) of this pattern.
     pub fn name(&self) -> Option<&str> {
-        self.string(FC_FULLNAME.as_cstr())
+        self.get(&attributes::FC_FULLNAME, 0)
     }
 
     /// Get the "file" (path on the filesystem) of this font pattern.
     pub fn filename(&self) -> Option<&str> {
-        self.string(FC_FILE.as_cstr())
+        self.get(&attributes::FC_FILE, 0)
     }
 
     /// Get the "index" (The index of the font within the file) of this pattern.
     pub fn face_index(&self) -> Option<i32> {
-        self.int(FC_INDEX.as_cstr())
+        self.get(&attributes::FC_INDEX, 0)
     }
 
     /// Get the "slant" (Italic, oblique or roman) of this pattern.
     pub fn slant(&self) -> Option<i32> {
-        self.int(FC_SLANT.as_cstr())
+        self.get(&attributes::FC_SLANT, 0)
     }
 
     /// Get the "weight" (Light, medium, demibold, bold or black) of this pattern.
     pub fn weight(&self) -> Option<i32> {
-        self.int(FC_WEIGHT.as_cstr())
+        self.get(&attributes::FC_WEIGHT, 0)
     }
 
     /// Get the "width" (Condensed, normal or expanded) of this pattern.
     pub fn width(&self) -> Option<i32> {
-        self.int(FC_WIDTH.as_cstr())
+        self.get(&attributes::FC_WIDTH, 0)
     }
 
     /// Get the "fontformat" ("TrueType" "Type 1" "BDF" "PCF" "Type 42" "CID Type 1" "CFF" "PFR" "Windows FNT") of this pattern.
     pub fn fontformat(&self) -> Result<FontFormat> {
-        self.string(FC_FONTFORMAT.as_cstr())
+        self.get(&attributes::FC_FONTFORMAT, 0)
             .ok_or_else(|| Error::UnknownFontFormat(String::new()))
             .and_then(|format| format.parse())
     }
@@ -512,17 +462,25 @@ impl Pattern {
     }
 
     ///
-    pub fn get<V>(&self, name: &attributes::Attribute<V>) -> Option<V>
+    pub fn get<'a, 'pat, V>(
+        &'pat self,
+        name: &'a attributes::Attribute<'pat, V>,
+        index: usize,
+    ) -> Option<V::Returns>
     where
-        V: attributes::AttributeType,
+        V: attributes::AttributeType<'pat>,
     {
-        name.value_of(self)
+        name.value_of(self, index)
     }
 
     ///
-    pub fn set<V>(&mut self, name: &attributes::Attribute<V>, value: V) -> bool
+    pub fn add<'a, 'pat, V>(
+        &'pat mut self,
+        name: &'a attributes::Attribute<'pat, V>,
+        value: V,
+    ) -> bool
     where
-        V: attributes::AttributeType,
+        V: attributes::AttributeType<'pat>,
     {
         name.value_for(self, value)
     }
@@ -556,28 +514,25 @@ pub mod attributes {
     use super::Pattern;
 
     ///
-    pub struct Attribute<V: AttributeType> {
+    pub struct Attribute<'pat, V: AttributeType<'pat>> {
         name: &'static CStr,
-        val: PhantomData<V>,
+        val: PhantomData<&'pat V>,
     }
 
-    impl<V> Attribute<V>
+    impl<'pat, V> Attribute<'pat, V>
     where
-        V: AttributeType,
+        V: AttributeType<'pat>,
     {
-        // const fn new(name: &'static CStr) -> Self {
-        //     Self {
-        //         name,
-        //         val: PhantomData,
-        //     }
-        // }
-
-        pub(super) fn value_of(&self, pat: &Pattern) -> Option<V> {
-            V::value(pat, self)
+        pub(super) fn value_of<'a>(
+            &'a self,
+            pat: &'pat Pattern,
+            index: usize,
+        ) -> Option<V::Returns> {
+            V::value(pat, self, index)
         }
 
-        pub(super) fn value_for(&self, pat: &mut Pattern, value: V) -> bool {
-            V::set(pat, self, value)
+        pub(super) fn value_for<'a>(&'a self, pat: &'pat mut Pattern, value: V) -> bool {
+            value.set_to(pat, self)
         }
     }
 
@@ -586,23 +541,39 @@ pub mod attributes {
 
         use super::{Attribute, AttributeType};
 
-        pub trait Sealed: Sized {
-            fn value(pat: &Pattern, attr: &Attribute<Self>) -> Option<Self>
+        pub trait MaybeRef<'a> {
+            type Returns;
+        }
+
+        pub trait Sealed<'pat>: Sized + MaybeRef<'pat> {
+            fn value<'a>(
+                pat: &'pat Pattern,
+                attr: &'a Attribute<'pat, Self>,
+                index: usize,
+            ) -> Option<<Self as MaybeRef<'pat>>::Returns>
             where
-                Self: AttributeType;
-            fn set(pat: &mut Pattern, attr: &Attribute<Self>, value: Self) -> bool
+                Self: AttributeType<'pat>;
+            fn set_to<'a>(self, pat: &'pat mut Pattern, attr: &'a Attribute<'pat, Self>) -> bool
             where
-                Self: AttributeType;
+                Self: AttributeType<'pat>;
         }
     }
 
     ///
-    pub trait AttributeType: private::Sealed {}
+    pub trait AttributeType<'pat>: private::Sealed<'pat> {}
 
-    impl<T> AttributeType for T where T: private::Sealed {}
+    impl<'pat, T> AttributeType<'pat> for T where T: private::Sealed<'pat> {}
 
-    impl private::Sealed for String {
-        fn value(pat: &Pattern, name: &Attribute<Self>) -> Option<Self> {
+    impl<'pat> private::MaybeRef<'pat> for String {
+        type Returns = &'pat str;
+    }
+
+    impl<'pat> private::Sealed<'pat> for String {
+        fn value<'a>(
+            pat: &'pat Pattern,
+            name: &'a Attribute<'pat, Self>,
+            index: usize,
+        ) -> Option<Self::Returns> {
             let c_str = unsafe {
                 let mut ret: *mut sys::FcChar8 = std::ptr::null_mut();
                 ffi_dispatch!(
@@ -610,7 +581,7 @@ pub mod attributes {
                     FcPatternGetString,
                     pat.as_ptr() as *mut _,
                     name.name.as_ptr(),
-                    0,
+                    index as i32,
                     &mut ret
                 )
                 .opt()?;
@@ -619,11 +590,12 @@ pub mod attributes {
                 }
                 CStr::from_ptr(ret as *const _)
             };
-            Some(c_str.to_string_lossy().into_owned())
+            c_str.to_str().ok()
         }
 
-        fn set(pat: &mut Pattern, name: &Attribute<Self>, value: Self) -> bool {
-            let c_str = CStr::from_bytes_with_nul(value.as_bytes()).unwrap();
+        fn set_to<'a>(mut self, pat: &'pat mut Pattern, name: &'a Attribute<'pat, Self>) -> bool {
+            self.push('\0');
+            let c_str = CStr::from_bytes_with_nul(self.as_bytes()).unwrap();
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
@@ -637,8 +609,12 @@ pub mod attributes {
         }
     }
 
-    impl private::Sealed for i32 {
-        fn value(pat: &Pattern, name: &Attribute<Self>) -> Option<Self> {
+    impl<'a> private::MaybeRef<'a> for i32 {
+        type Returns = i32;
+    }
+
+    impl<'a> private::Sealed<'a> for i32 {
+        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
             let mut val: i32 = 0;
             unsafe {
                 ffi_dispatch!(
@@ -646,7 +622,7 @@ pub mod attributes {
                     FcPatternGetInteger,
                     pat.as_ptr() as *mut _,
                     name.name.as_ptr(),
-                    0,
+                    index as i32,
                     &mut val
                 )
                 .opt()?;
@@ -654,7 +630,7 @@ pub mod attributes {
             Some(val)
         }
 
-        fn set(pat: &mut Pattern, attr: &Attribute<Self>, value: Self) -> bool {
+        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
@@ -662,14 +638,18 @@ pub mod attributes {
                         FcPatternAddInteger,
                         pat.as_mut_ptr(),
                         attr.name.as_ptr(),
-                        value
+                        self
                     )
                 }
         }
     }
 
-    impl private::Sealed for bool {
-        fn value(pat: &Pattern, name: &Attribute<Self>) -> Option<Self> {
+    impl<'a> private::MaybeRef<'a> for bool {
+        type Returns = bool;
+    }
+
+    impl<'a> private::Sealed<'a> for bool {
+        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
             let mut val: i32 = 0;
             unsafe {
                 ffi_dispatch!(
@@ -677,7 +657,7 @@ pub mod attributes {
                     FcPatternGetBool,
                     pat.as_ptr() as *mut _,
                     name.name.as_ptr(),
-                    0,
+                    index as i32,
                     &mut val
                 )
                 .opt()?;
@@ -685,7 +665,7 @@ pub mod attributes {
             Some(val == FcTrue)
         }
 
-        fn set(pat: &mut Pattern, attr: &Attribute<Self>, value: Self) -> bool {
+        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
@@ -693,14 +673,18 @@ pub mod attributes {
                         FcPatternAddBool,
                         pat.as_mut_ptr(),
                         attr.name.as_ptr(),
-                        if value { FcTrue } else { FcFalse }
+                        if self { FcTrue } else { FcFalse }
                     )
                 }
         }
     }
 
-    impl private::Sealed for f64 {
-        fn value(pat: &Pattern, name: &Attribute<Self>) -> Option<Self> {
+    impl<'a> private::MaybeRef<'a> for f64 {
+        type Returns = f64;
+    }
+
+    impl<'a> private::Sealed<'a> for f64 {
+        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
             let mut val: f64 = 0.;
             unsafe {
                 ffi_dispatch!(
@@ -708,7 +692,7 @@ pub mod attributes {
                     FcPatternGetDouble,
                     pat.as_ptr() as *mut _,
                     name.name.as_ptr(),
-                    0,
+                    index as i32,
                     &mut val
                 )
                 .opt()?;
@@ -716,7 +700,7 @@ pub mod attributes {
             Some(val)
         }
 
-        fn set(pat: &mut Pattern, attr: &Attribute<Self>, value: Self) -> bool {
+        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
@@ -724,14 +708,22 @@ pub mod attributes {
                         FcPatternAddDouble,
                         pat.as_mut_ptr(),
                         attr.name.as_ptr(),
-                        value
+                        self
                     )
                 }
         }
     }
 
-    impl private::Sealed for &crate::Matrix {
-        fn value(pat: &Pattern, name: &Attribute<Self>) -> Option<Self> {
+    impl<'a> private::MaybeRef<'a> for crate::Matrix {
+        type Returns = &'a crate::Matrix;
+    }
+
+    impl<'pat> private::Sealed<'pat> for crate::Matrix {
+        fn value(
+            pat: &'pat Pattern,
+            name: &Attribute<Self>,
+            index: usize,
+        ) -> Option<Self::Returns> {
             let val = unsafe {
                 let mut val = std::ptr::null_mut();
                 ffi_dispatch!(
@@ -739,7 +731,7 @@ pub mod attributes {
                     FcPatternGetMatrix,
                     pat.as_ptr() as *mut _,
                     name.name.as_ptr(),
-                    0,
+                    index as i32,
                     &mut val
                 )
                 .opt()?;
@@ -751,7 +743,7 @@ pub mod attributes {
             Some(val)
         }
 
-        fn set(pat: &mut Pattern, attr: &Attribute<Self>, value: Self) -> bool {
+        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
             // Safety: It copy the matrix, so it is safe to use it as a mutable pointer.
             FcTrue
                 == unsafe {
@@ -760,14 +752,18 @@ pub mod attributes {
                         FcPatternAddMatrix,
                         pat.as_mut_ptr(),
                         attr.name.as_ptr(),
-                        &value.matrix
+                        &self.matrix
                     )
                 }
         }
     }
 
-    impl private::Sealed for &crate::CharSet {
-        fn value(pat: &Pattern, name: &Attribute<Self>) -> Option<Self> {
+    impl<'a> private::MaybeRef<'a> for crate::OwnedCharSet {
+        type Returns = &'a crate::CharSet;
+    }
+
+    impl<'a> private::Sealed<'a> for crate::OwnedCharSet {
+        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
             unsafe {
                 let mut val = std::ptr::null_mut();
                 ffi_dispatch!(
@@ -775,7 +771,7 @@ pub mod attributes {
                     FcPatternGetCharSet,
                     pat.as_ptr() as *mut _,
                     name.name.as_ptr(),
-                    0,
+                    index as i32,
                     &mut val
                 )
                 .opt()?;
@@ -786,23 +782,27 @@ pub mod attributes {
             }
         }
 
-        fn set(_pat: &mut Pattern, _attr: &Attribute<Self>, _value: Self) -> bool {
-            unimplemented!("set &'CharSet to pattern is unsound.");
-            // FcTrue
-            //     == unsafe {
-            //         ffi_dispatch!(
-            //             LIB,
-            //             FcPatternAddCharSet,
-            //             pat.as_mut_ptr(),
-            //             attr.name.as_ptr(),
-            //             &value.fcset
-            //         )
-            //     }
+        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
+            // unimplemented!("set &'CharSet to pattern is unsound.");
+            FcTrue
+                == unsafe {
+                    ffi_dispatch!(
+                        LIB,
+                        FcPatternAddCharSet,
+                        pat.as_mut_ptr(),
+                        attr.name.as_ptr(),
+                        self.fcset.as_ptr()
+                    )
+                }
         }
     }
 
-    impl private::Sealed for crate::LangSet {
-        fn value(pat: &Pattern, name: &Attribute<Self>) -> Option<Self> {
+    impl<'a> private::MaybeRef<'a> for crate::LangSet {
+        type Returns = crate::LangSet;
+    }
+
+    impl<'a> private::Sealed<'a> for crate::LangSet {
+        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
             let val = unsafe {
                 let mut val = std::ptr::null_mut();
                 ffi_dispatch!(
@@ -810,7 +810,7 @@ pub mod attributes {
                     FcPatternGetLangSet,
                     pat.as_ptr() as *mut _,
                     name.name.as_ptr(),
-                    0,
+                    index as i32,
                     &mut val
                 )
                 .opt()?;
@@ -819,7 +819,7 @@ pub mod attributes {
             NonNull::new(val).map(|langset| crate::LangSet { langset })
         }
 
-        fn set(pat: &mut Pattern, attr: &Attribute<Self>, value: Self) -> bool {
+        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
@@ -827,7 +827,7 @@ pub mod attributes {
                         FcPatternAddLangSet,
                         pat.as_mut_ptr(),
                         attr.name.as_ptr(),
-                        value.langset.as_ptr()
+                        self.langset.as_ptr()
                     )
                 }
         }
@@ -991,7 +991,7 @@ pub mod attributes {
     attribute!(
         b"charset\0",
         FC_CHARSET,
-        &crate::CharSet,
+        crate::OwnedCharSet,
         "Unicode chars encoded by the font"
     );
     attribute!(
@@ -1102,21 +1102,42 @@ mod tests {
     #[test]
     fn test_into_inner() {
         let mut pat = super::OwnedPattern::new();
-        pat.add_string(
-            crate::FC_FAMILY.as_cstr(),
-            &std::ffi::CString::new("nomospace").unwrap(),
-        );
+        pat.add(&attrs::FC_FAMILY, "nomospace".to_string());
         let pat = pat.into_inner();
         let pat = pat as *mut super::Pattern;
         assert_eq!(
-            unsafe { &*pat }.string(crate::FC_FAMILY.as_cstr()),
+            unsafe { &*pat }.get(&attrs::FC_FAMILY, 0),
             Some("nomospace")
         );
     }
 
     #[test]
-    fn test_get_filepath() {
+    fn test_get_family() {
         let pat = super::OwnedPattern::new();
-        pat.get(&attrs::FC_FAMILY);
+        assert!(pat.get(&attrs::FC_FAMILY, 0).is_none());
+    }
+
+    #[test]
+    fn test_get_family_exists() {
+        let mut pat = super::OwnedPattern::default();
+        pat.add(&attrs::FC_FAMILY, "nomospace".to_string());
+        assert!(pat.get(&attrs::FC_FAMILY, 0).is_some());
+    }
+
+    #[test]
+    fn test_get_filepath() {
+        let mut cfg = crate::FontConfig::default();
+        let mut pat = super::OwnedPattern::default();
+        pat.add(&attrs::FC_FAMILY, "nomospace".to_string());
+        cfg.substitute(&mut pat, crate::MatchKind::Pattern);
+        let pat = pat.font_match(&mut cfg);
+        let file = pat.get(&attrs::FC_FILE, 0);
+        assert!(file.is_some());
+        let dpi = pat.get(&attrs::FC_DPI, 0);
+        println!("{:?}", dpi);
+        if let Some(file) = file {
+            assert!(file.starts_with("/usr/share/fonts"));
+            assert!(std::path::Path::new(&file).exists(), "{}", file);
+        }
     }
 }

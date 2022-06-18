@@ -515,7 +515,7 @@ pub mod attributes {
 
     ///
     pub struct Attribute<'pat, V: AttributeType<'pat>> {
-        name: &'static CStr,
+        name: const_cstr::ConstCStr,
         val: PhantomData<&'pat V>,
     }
 
@@ -837,7 +837,7 @@ pub mod attributes {
         ($bytes:literal, $name:ident, $vtype:ty, $comment:literal) => {
             /// $comment
             pub const $name: Attribute<$vtype> = Attribute {
-                name: unsafe { &*($bytes as *const [u8] as *const CStr) },
+                name: ::fontconfig_sys::constants::$name,
                 val: PhantomData,
             };
         };

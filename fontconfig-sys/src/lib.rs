@@ -173,6 +173,7 @@ pub mod constants {
         pub FC_CHAR_WIDTH = "charwidth";
         pub FC_CHAR_HEIGHT = "charheight";
         pub FC_MATRIX = "matrix";
+        pub FC_ORDER = "order";
     }
 }
 

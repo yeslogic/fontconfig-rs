@@ -1,8 +1,8 @@
 [package]
 name = "yeslogic-fontconfig-sys"
 version = "3.0.1"
-edition = "2018"
-rust-version = "1.46"
+edition = "2021"
+rust-version = "1.56.1"
 authors = [
     "Austin Bonander <austin.bonander@gmail.com>",
     "The Servo Project Developers",

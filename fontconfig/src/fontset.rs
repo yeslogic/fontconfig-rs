@@ -193,3 +193,52 @@ impl<'fs, 'pat> Iterator for IterMut<'fs, 'pat> {
         Some(unsafe { &mut *(pat as *mut sys::FcPattern as *mut Pattern) })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::attributes;
+    use crate::pattern::OwnedPattern;
+
+    #[test]
+    fn fontset_new() {
+        let fontset = FontSet::new();
+        assert_eq!(fontset.len(), 0);
+    }
+
+    #[test]
+    fn fontset_iter() {
+        let mut fontset = FontSet::new();
+        let mut pat = OwnedPattern::default();
+        pat.add(&attributes::FC_FAMILY, "sans-serif".to_string());
+        fontset.push(pat);
+        assert_eq!(fontset.len(), 1);
+        let mut c = 0;
+        for pat in fontset.iter() {
+            c += 1;
+            // pat.add(&attributes::FC_DPI, 10.);  // this should be failed.
+            assert_eq!(pat.get(&attributes::FC_FAMILY, 0), Some("sans-serif"));
+        }
+
+        assert_eq!(c, fontset.len());
+    }
+
+    #[test]
+    fn fontset_iter_mut() {
+        let mut fontset = FontSet::new();
+        let mut pat = OwnedPattern::new();
+        pat.add(&attributes::FC_FAMILY, "sans-serif".to_string());
+        fontset.push(pat);
+        assert_eq!(fontset.len(), 1);
+        let mut c = 0;
+        for pat in fontset.iter_mut() {
+            c += 1;
+            assert_eq!(pat.get(&attributes::FC_DPI, 0), None);
+            assert!(pat.add(&attributes::FC_DPI, 20.));
+            assert_eq!(pat.get(&attributes::FC_FAMILY, 0), Some("sans-serif"));
+            assert_eq!(pat.get(&attributes::FC_DPI, 0), Some(20.));
+        }
+
+        assert_eq!(c, fontset.len());
+    }
+}

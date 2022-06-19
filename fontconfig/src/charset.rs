@@ -171,3 +171,88 @@ impl AsMut<CharSet> for OwnedCharSet {
         self
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn charset_modify() {
+        let mut cs = OwnedCharSet::new();
+        assert!(!cs.has_char('a'));
+        cs.add_char('a');
+        assert!(cs.has_char('a'));
+        cs.del_char('a');
+        assert!(!cs.has_char('a'));
+    }
+
+    #[test]
+    fn charset_merge() {
+        let mut cs1 = OwnedCharSet::new();
+        let mut cs2 = OwnedCharSet::new();
+        cs1.add_char('a');
+        cs2.add_char('b');
+        cs1.merge(&cs2);
+        assert!(cs1.has_char('a'));
+        assert!(cs1.has_char('b'));
+    }
+
+    #[test]
+    fn charset_union() {
+        let mut cs1 = OwnedCharSet::new();
+        let mut cs2 = OwnedCharSet::new();
+        cs1.add_char('a');
+        cs2.add_char('b');
+        let cs3 = cs1.union(&cs2);
+        assert!(cs3.has_char('a'));
+        assert!(cs3.has_char('b'));
+        assert!(!cs1.has_char('b'));
+        assert!(!cs2.has_char('a'));
+    }
+
+    #[test]
+    fn charset_intersect() {
+        let mut cs1 = OwnedCharSet::new();
+        let mut cs2 = OwnedCharSet::new();
+        cs1.add_char('a');
+        cs1.add_char('c');
+        cs2.add_char('b');
+        cs2.add_char('c');
+        let cs3 = cs1.intersect(&cs2);
+        assert!(!cs3.has_char('a'));
+        assert!(!cs3.has_char('b'));
+        assert!(cs3.has_char('c'));
+        assert!(!cs1.has_char('b'));
+        assert!(!cs2.has_char('a'));
+    }
+
+    #[test]
+    fn charset_subtract() {
+        let mut cs1 = OwnedCharSet::new();
+        let mut cs2 = OwnedCharSet::new();
+        cs1.add_char('a');
+        cs1.add_char('c');
+        cs2.add_char('b');
+        cs2.add_char('c');
+        let cs3 = cs1.subtract(&cs2);
+        assert!(cs3.has_char('a'));
+        assert!(!cs3.has_char('b'));
+        assert!(!cs3.has_char('c'));
+        assert!(!cs1.has_char('b'));
+        assert!(!cs2.has_char('a'));
+    }
+
+    #[test]
+    fn charset_equal() {
+        let mut cs1 = OwnedCharSet::new();
+        let mut cs2 = OwnedCharSet::new();
+        cs1.add_char('a');
+        cs1.add_char('c');
+        cs2.add_char('b');
+        cs2.add_char('c');
+        assert!(!PartialEq::eq(cs1.as_ref(), &cs2));
+        cs2.add_char('a');
+        cs2.del_char('b');
+        assert!(PartialEq::eq(cs1.as_ref(), &cs2));
+    }
+    }
+}

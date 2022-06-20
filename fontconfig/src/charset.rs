@@ -1,5 +1,6 @@
 //!
 
+use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::ptr::{self, NonNull};
 
@@ -73,6 +74,29 @@ impl CharSet {
         }
     }
 
+    ///
+    pub fn iter(&self) -> Iter {
+        let mut map = [0; sys::constants::FC_CHARSET_MAP_SIZE as usize];
+        let mut next = 0;
+        let codepoint = unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcCharSetFirstPage,
+                self.as_ptr(),
+                map.as_mut_ptr(),
+                &mut next
+            )
+        };
+        Iter {
+            cs: self,
+            codepoint,
+            next,
+            map,
+            i: 0,
+            bit: 0,
+        }
+    }
+
     pub(crate) fn as_ptr(&self) -> *const sys::FcCharSet {
         &self.fcset
     }
@@ -103,7 +127,7 @@ impl OwnedCharSet {
     }
 
     /// Merge self with other `CharSet`.
-    pub fn merge(&mut self, other: &Self) {
+    pub fn merge(&mut self, other: &CharSet) {
         let res = unsafe {
             ffi_dispatch!(
                 LIB,
@@ -171,6 +195,106 @@ impl AsMut<CharSet> for OwnedCharSet {
         self
     }
 }
+
+impl fmt::Debug for CharSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_set().entries(self.iter()).finish()
+    }
+}
+
+impl fmt::Debug for OwnedCharSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_set().entries(self.iter()).finish()
+    }
+}
+
+///
+pub struct Iter<'a> {
+    cs: &'a CharSet,
+    codepoint: sys::FcChar32,
+    next: sys::FcChar32,
+    map: [sys::FcChar32; sys::constants::FC_CHARSET_MAP_SIZE as usize],
+    i: usize,
+    bit: usize,
+}
+
+impl Iterator for Iter<'_> {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        const MAP_SIZE: usize = sys::constants::FC_CHARSET_MAP_SIZE as usize;
+        loop {
+            if self.codepoint == sys::constants::FC_CHARSET_DONE {
+                return None;
+            }
+            // end of page.
+            if self.i >= MAP_SIZE {
+                if self.next == sys::constants::FC_CHARSET_DONE {
+                    // end of last page.
+                    self.codepoint = sys::constants::FC_CHARSET_DONE;
+                } else {
+                    // next page
+                    self.codepoint = unsafe {
+                        ffi_dispatch!(
+                            LIB,
+                            FcCharSetNextPage,
+                            self.cs.as_ptr(),
+                            self.map.as_mut_ptr(),
+                            &mut self.next
+                        )
+                    };
+                    self.i = 0;
+                }
+                continue;
+            }
+            let mut bits = self.map[self.i];
+            if bits == 0 {
+                self.i += 1;
+                self.bit = 0;
+                continue;
+            }
+
+            let mut ok = true;
+            // println!(" -> bits {:#b} {}", bits, self.bit);
+            let mut n = bits >> self.bit;
+            while n & 1 == 0 {
+                if n == 0 {
+                    self.i += 1;
+                    self.bit = 0;
+                    ok = false;
+                    break;
+                }
+                self.bit += 1;
+                if self.bit > 31 {
+                    self.i += 1;
+                    self.bit = 0;
+                    ok = false;
+                    break;
+                }
+                if self.i >= MAP_SIZE {
+                    ok = false;
+                    break;
+                }
+                bits = self.map[self.i];
+                // println!("bits {:#b} x {}", bits, self.bit);
+                n = bits >> self.bit;
+            }
+            // 如果上面的while循环正常执行完，没有break，才可以执行这里.
+            // if the while loop is not broken, then we can execute this.
+            if ok {
+                let codepoint =
+                    self.codepoint + (32u32 * self.i as u32) + u32::try_from(self.bit).ok()?;
+                // println!("{}({})", codepoint, char::from_u32(codepoint).unwrap());
+                self.bit += 1;
+                if self.bit > 31 {
+                    self.i += 1;
+                    self.bit = 0;
+                }
+                return char::try_from(codepoint).ok();
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,10 +373,28 @@ mod tests {
         cs1.add_char('c');
         cs2.add_char('b');
         cs2.add_char('c');
-        assert!(!PartialEq::eq(cs1.as_ref(), &cs2));
+        assert_ne!(cs1.as_ref(), cs2.as_ref());
         cs2.add_char('a');
         cs2.del_char('b');
-        assert!(PartialEq::eq(cs1.as_ref(), &cs2));
+        assert_eq!(cs1.as_ref(), cs2.as_ref());
     }
+
+    #[test]
+    fn charset_iter() {
+        let mut cs = OwnedCharSet::new();
+        cs.add_char('a');
+        cs.add_char('b');
+        cs.add_char('c');
+        cs.add_char('汉');
+        cs.add_char('字');
+        cs.add_char('😁');
+        let mut iter = cs.iter();
+        assert_eq!(iter.next(), Some('a'));
+        assert_eq!(iter.next(), Some('b'));
+        assert_eq!(iter.next(), Some('c'));
+        assert_eq!(iter.next(), Some('字'));
+        assert_eq!(iter.next(), Some('汉'));
+        assert_eq!(iter.next(), Some('😁'));
+        assert_eq!(iter.next(), None);
     }
 }

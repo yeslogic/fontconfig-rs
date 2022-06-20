@@ -113,6 +113,7 @@ pub mod constants {
     pub const FC_LCD_LEGACY: c_int = 3;
 
     pub const FC_CHARSET_MAP_SIZE: c_int = 8;
+    pub const FC_CHARSET_DONE: u32 = u32::MAX;
     pub const FC_UTF8_MAX_LEN: c_int = 6;
 
     const_cstr! {

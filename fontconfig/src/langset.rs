@@ -1,6 +1,6 @@
 //!
 use std::ffi::CStr;
-
+use std::fmt;
 use std::ptr::NonNull;
 
 use fontconfig_sys as sys;
@@ -16,7 +16,7 @@ use crate::{CharSet, FcTrue, StringSet};
 
 /// The results of comparing two language strings in [`LangSet`] objects.
 #[doc(alias = "FcLangResult")]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum LangSetCmp {
     /// The objects match language and territory
     #[doc(alias = "FcLangEqual")]
@@ -172,5 +172,97 @@ impl Default for LangSet {
         // FIXME: use `FcGetDefaultLangs` which added version 2.9.91.
         // unsafe { ffi_dispatch!(LIB, FcGetDefaultLangs,) }
         LangSet::new()
+    }
+}
+
+impl fmt::Debug for LangSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let langs = self.langs();
+        write!(f, "LangSet {{ langs: {:?} }}", langs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new() {
+        let langset = LangSet::new();
+        assert_eq!(langset.langs().iter().count(), 0);
+        assert_eq!(langset.langs().iter().next(), None);
+    }
+
+    #[test]
+    fn push() {
+        let mut langset = LangSet::new();
+        langset.push(&CStr::from_bytes_with_nul(b"en\0").unwrap());
+        assert_eq!(langset.langs().iter().count(), 1);
+        let langs = langset.langs();
+        let mut langs = langs.iter();
+        assert_eq!(langs.next(), Some("en"));
+        assert_eq!(langs.next(), None);
+    }
+
+    #[test]
+    fn debug() {
+        let mut langset = LangSet::new();
+        assert_eq!(format!("{:?}", langset), "LangSet { langs: {} }");
+        langset.push(&CStr::from_bytes_with_nul(b"en\0").unwrap());
+        assert_eq!(format!("{:?}", langset), "LangSet { langs: {\"en\"} }");
+    }
+
+    #[test]
+    fn contains() {
+        let mut langset = LangSet::new();
+        langset.push(&CStr::from_bytes_with_nul(b"en\0").unwrap());
+        langset.push(&CStr::from_bytes_with_nul(b"zh\0").unwrap());
+        let mut langset2 = LangSet::new();
+        langset2.push(&CStr::from_bytes_with_nul(b"en\0").unwrap());
+        assert_eq!(langset.contains(&langset2), true);
+        assert_eq!(langset2.contains(&langset), false);
+        langset2.push(&CStr::from_bytes_with_nul(b"fr\0").unwrap());
+        assert_eq!(langset.contains(&langset2), false);
+    }
+
+    #[test]
+    fn compare() {
+        let mut langset = LangSet::new();
+        langset.push(&CStr::from_bytes_with_nul(b"en-US\0").unwrap());
+        let mut langset2 = LangSet::new();
+        langset2.push(&CStr::from_bytes_with_nul(b"en-UK\0").unwrap());
+        assert_eq!(langset.cmp(&langset2), LangSetCmp::DifferentTerritory);
+        let mut langset3 = LangSet::new();
+        langset3.push(&CStr::from_bytes_with_nul(b"en-US\0").unwrap());
+        assert_eq!(langset3.cmp(&langset), LangSetCmp::Equal);
+        let mut langset4 = LangSet::new();
+        langset4.push(&CStr::from_bytes_with_nul(b"fr\0").unwrap());
+        assert_eq!(langset3.cmp(&langset4), LangSetCmp::DifferentLang);
+    }
+
+    #[test]
+    fn charset() {
+        use crate::OwnedCharSet;
+
+        let charset = LangSet::charset(&CStr::from_bytes_with_nul(b"en\0").unwrap());
+        let mut cs = OwnedCharSet::new();
+        for c in [
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
+            'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+            'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y',
+            'z', 'À', 'Ç', 'È', 'É', 'Ê', 'Ë', 'Ï', 'Ñ', 'Ô', 'Ö', 'à', 'ç', 'è', 'é', 'ê', 'ë',
+            'ï', 'ñ', 'ô', 'ö',
+        ] {
+            cs.add_char(c);
+        }
+        assert_eq!(
+            charset.iter().count(),
+            72,
+            "{:?}",
+            charset.iter().collect::<Vec<_>>()
+        );
+        assert!(charset.is_subset(&cs));
+        assert!(cs.is_subset(&charset));
+        assert_eq!(charset, cs.as_ref());
     }
 }

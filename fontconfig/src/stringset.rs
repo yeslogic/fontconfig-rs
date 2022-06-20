@@ -1,4 +1,5 @@
 //!
+use core::fmt;
 use std::ffi::CStr;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -119,6 +120,12 @@ impl<'a> Iterator for StringSetIter<'a> {
 impl Default for StringSet {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl fmt::Debug for StringSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_set().entries(self.iter()).finish()
     }
 }
 

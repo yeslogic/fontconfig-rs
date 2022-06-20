@@ -20,8 +20,7 @@ pub struct FcStr(NonNull<sys::FcChar8>);
 
 /// Represented with the FcChar8 type with ownership.
 impl FcStr {
-    #[doc(hidden)]
-    pub unsafe fn from_ptr(ptr: *mut sys::FcChar8) -> Option<Self> {
+    pub(crate) unsafe fn from_ptr(ptr: *mut sys::FcChar8) -> Option<Self> {
         NonNull::new(ptr).map(FcStr)
     }
 }

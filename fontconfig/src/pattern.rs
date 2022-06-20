@@ -282,37 +282,37 @@ impl Pattern {
 
     /// Get the "fullname" (human-readable name) of this pattern.
     pub fn name(&self) -> Option<&str> {
-        self.get(&attributes::FC_FULLNAME, 0)
+        self.get(&properties::FC_FULLNAME, 0)
     }
 
     /// Get the "file" (path on the filesystem) of this font pattern.
     pub fn filename(&self) -> Option<&str> {
-        self.get(&attributes::FC_FILE, 0)
+        self.get(&properties::FC_FILE, 0)
     }
 
     /// Get the "index" (The index of the font within the file) of this pattern.
     pub fn face_index(&self) -> Option<i32> {
-        self.get(&attributes::FC_INDEX, 0)
+        self.get(&properties::FC_INDEX, 0)
     }
 
     /// Get the "slant" (Italic, oblique or roman) of this pattern.
     pub fn slant(&self) -> Option<i32> {
-        self.get(&attributes::FC_SLANT, 0)
+        self.get(&properties::FC_SLANT, 0)
     }
 
     /// Get the "weight" (Light, medium, demibold, bold or black) of this pattern.
     pub fn weight(&self) -> Option<i32> {
-        self.get(&attributes::FC_WEIGHT, 0)
+        self.get(&properties::FC_WEIGHT, 0)
     }
 
     /// Get the "width" (Condensed, normal or expanded) of this pattern.
     pub fn width(&self) -> Option<i32> {
-        self.get(&attributes::FC_WIDTH, 0)
+        self.get(&properties::FC_WIDTH, 0)
     }
 
     /// Get the "fontformat" ("TrueType" "Type 1" "BDF" "PCF" "Type 42" "CID Type 1" "CFF" "PFR" "Windows FNT") of this pattern.
     pub fn fontformat(&self) -> Result<FontFormat> {
-        self.get(&attributes::FC_FONTFORMAT, 0)
+        self.get(&properties::FC_FONTFORMAT, 0)
             .ok_or_else(|| Error::UnknownFontFormat(String::new()))
             .and_then(|format| format.parse())
     }
@@ -464,11 +464,11 @@ impl Pattern {
     ///
     pub fn get<'a, 'pat, V>(
         &'pat self,
-        name: &'a attributes::Attribute<'pat, V>,
+        name: &'a properties::Property<'pat, V>,
         index: usize,
     ) -> Option<V::Returns>
     where
-        V: attributes::AttributeType<'pat>,
+        V: properties::PropertyType<'pat>,
     {
         name.value_of(self, index)
     }
@@ -476,11 +476,11 @@ impl Pattern {
     ///
     pub fn add<'a, 'pat, V>(
         &'pat mut self,
-        name: &'a attributes::Attribute<'pat, V>,
+        name: &'a properties::Property<'pat, V>,
         value: V,
     ) -> bool
     where
-        V: attributes::AttributeType<'pat>,
+        V: properties::PropertyType<'pat>,
     {
         name.value_for(self, value)
     }
@@ -495,7 +495,7 @@ impl Default for OwnedPattern {
 }
 
 ///
-pub mod attributes {
+pub mod properties {
     use std::ffi::CStr;
     use std::marker::PhantomData;
     use std::ptr::NonNull;
@@ -514,14 +514,14 @@ pub mod attributes {
     use super::Pattern;
 
     ///
-    pub struct Attribute<'pat, V: AttributeType<'pat>> {
+    pub struct Property<'pat, V: PropertyType<'pat>> {
         name: const_cstr::ConstCStr,
         val: PhantomData<&'pat V>,
     }
 
-    impl<'pat, V> Attribute<'pat, V>
+    impl<'pat, V> Property<'pat, V>
     where
-        V: AttributeType<'pat>,
+        V: PropertyType<'pat>,
     {
         pub(super) fn value_of<'a>(
             &'a self,
@@ -539,7 +539,7 @@ pub mod attributes {
     mod private {
         use crate::Pattern;
 
-        use super::{Attribute, AttributeType};
+        use super::{Property, PropertyType};
 
         pub trait MaybeRef<'a> {
             type Returns;
@@ -548,21 +548,21 @@ pub mod attributes {
         pub trait Sealed<'pat>: Sized + MaybeRef<'pat> {
             fn value<'a>(
                 pat: &'pat Pattern,
-                attr: &'a Attribute<'pat, Self>,
+                property: &'a Property<'pat, Self>,
                 index: usize,
             ) -> Option<<Self as MaybeRef<'pat>>::Returns>
             where
-                Self: AttributeType<'pat>;
-            fn set_to<'a>(self, pat: &'pat mut Pattern, attr: &'a Attribute<'pat, Self>) -> bool
+                Self: PropertyType<'pat>;
+            fn set_to<'a>(self, pat: &'pat mut Pattern, property: &'a Property<'pat, Self>) -> bool
             where
-                Self: AttributeType<'pat>;
+                Self: PropertyType<'pat>;
         }
     }
 
     ///
-    pub trait AttributeType<'pat>: private::Sealed<'pat> {}
+    pub trait PropertyType<'pat>: private::Sealed<'pat> {}
 
-    impl<'pat, T> AttributeType<'pat> for T where T: private::Sealed<'pat> {}
+    impl<'pat, T> PropertyType<'pat> for T where T: private::Sealed<'pat> {}
 
     impl<'pat> private::MaybeRef<'pat> for String {
         type Returns = &'pat str;
@@ -571,7 +571,7 @@ pub mod attributes {
     impl<'pat> private::Sealed<'pat> for String {
         fn value<'a>(
             pat: &'pat Pattern,
-            name: &'a Attribute<'pat, Self>,
+            name: &'a Property<'pat, Self>,
             index: usize,
         ) -> Option<Self::Returns> {
             let c_str = unsafe {
@@ -593,7 +593,7 @@ pub mod attributes {
             c_str.to_str().ok()
         }
 
-        fn set_to<'a>(mut self, pat: &'pat mut Pattern, name: &'a Attribute<'pat, Self>) -> bool {
+        fn set_to<'a>(mut self, pat: &'pat mut Pattern, name: &'a Property<'pat, Self>) -> bool {
             self.push('\0');
             let c_str = CStr::from_bytes_with_nul(self.as_bytes()).unwrap();
             FcTrue
@@ -614,7 +614,7 @@ pub mod attributes {
     }
 
     impl<'a> private::Sealed<'a> for i32 {
-        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
+        fn value(pat: &Pattern, name: &Property<Self>, index: usize) -> Option<Self::Returns> {
             let mut val: i32 = 0;
             unsafe {
                 ffi_dispatch!(
@@ -630,14 +630,14 @@ pub mod attributes {
             Some(val)
         }
 
-        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
+        fn set_to(self, pat: &mut Pattern, property: &Property<Self>) -> bool {
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
                         LIB,
                         FcPatternAddInteger,
                         pat.as_mut_ptr(),
-                        attr.name.as_ptr(),
+                        property.name.as_ptr(),
                         self
                     )
                 }
@@ -649,7 +649,7 @@ pub mod attributes {
     }
 
     impl<'a> private::Sealed<'a> for bool {
-        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
+        fn value(pat: &Pattern, name: &Property<Self>, index: usize) -> Option<Self::Returns> {
             let mut val: i32 = 0;
             unsafe {
                 ffi_dispatch!(
@@ -665,14 +665,14 @@ pub mod attributes {
             Some(val == FcTrue)
         }
 
-        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
+        fn set_to(self, pat: &mut Pattern, property: &Property<Self>) -> bool {
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
                         LIB,
                         FcPatternAddBool,
                         pat.as_mut_ptr(),
-                        attr.name.as_ptr(),
+                        property.name.as_ptr(),
                         if self { FcTrue } else { FcFalse }
                     )
                 }
@@ -684,7 +684,7 @@ pub mod attributes {
     }
 
     impl<'a> private::Sealed<'a> for f64 {
-        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
+        fn value(pat: &Pattern, name: &Property<Self>, index: usize) -> Option<Self::Returns> {
             let mut val: f64 = 0.;
             unsafe {
                 ffi_dispatch!(
@@ -700,14 +700,14 @@ pub mod attributes {
             Some(val)
         }
 
-        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
+        fn set_to(self, pat: &mut Pattern, property: &Property<Self>) -> bool {
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
                         LIB,
                         FcPatternAddDouble,
                         pat.as_mut_ptr(),
-                        attr.name.as_ptr(),
+                        property.name.as_ptr(),
                         self
                     )
                 }
@@ -719,11 +719,7 @@ pub mod attributes {
     }
 
     impl<'pat> private::Sealed<'pat> for crate::Matrix {
-        fn value(
-            pat: &'pat Pattern,
-            name: &Attribute<Self>,
-            index: usize,
-        ) -> Option<Self::Returns> {
+        fn value(pat: &'pat Pattern, name: &Property<Self>, index: usize) -> Option<Self::Returns> {
             let val = unsafe {
                 let mut val = std::ptr::null_mut();
                 ffi_dispatch!(
@@ -743,7 +739,7 @@ pub mod attributes {
             Some(val)
         }
 
-        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
+        fn set_to(self, pat: &mut Pattern, property: &Property<Self>) -> bool {
             // Safety: It copy the matrix, so it is safe to use it as a mutable pointer.
             FcTrue
                 == unsafe {
@@ -751,7 +747,7 @@ pub mod attributes {
                         LIB,
                         FcPatternAddMatrix,
                         pat.as_mut_ptr(),
-                        attr.name.as_ptr(),
+                        property.name.as_ptr(),
                         &self.matrix
                     )
                 }
@@ -763,7 +759,7 @@ pub mod attributes {
     }
 
     impl<'a> private::Sealed<'a> for crate::OwnedCharSet {
-        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
+        fn value(pat: &Pattern, name: &Property<Self>, index: usize) -> Option<Self::Returns> {
             unsafe {
                 let mut val = std::ptr::null_mut();
                 ffi_dispatch!(
@@ -782,7 +778,7 @@ pub mod attributes {
             }
         }
 
-        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
+        fn set_to(self, pat: &mut Pattern, property: &Property<Self>) -> bool {
             // unimplemented!("set &'CharSet to pattern is unsound.");
             FcTrue
                 == unsafe {
@@ -790,7 +786,7 @@ pub mod attributes {
                         LIB,
                         FcPatternAddCharSet,
                         pat.as_mut_ptr(),
-                        attr.name.as_ptr(),
+                        property.name.as_ptr(),
                         self.fcset.as_ptr()
                     )
                 }
@@ -802,7 +798,7 @@ pub mod attributes {
     }
 
     impl<'a> private::Sealed<'a> for crate::LangSet {
-        fn value(pat: &Pattern, name: &Attribute<Self>, index: usize) -> Option<Self::Returns> {
+        fn value(pat: &Pattern, name: &Property<Self>, index: usize) -> Option<Self::Returns> {
             let val = unsafe {
                 let mut val = std::ptr::null_mut();
                 ffi_dispatch!(
@@ -819,294 +815,294 @@ pub mod attributes {
             NonNull::new(val).map(|langset| crate::LangSet { langset })
         }
 
-        fn set_to(self, pat: &mut Pattern, attr: &Attribute<Self>) -> bool {
+        fn set_to(self, pat: &mut Pattern, property: &Property<Self>) -> bool {
             FcTrue
                 == unsafe {
                     ffi_dispatch!(
                         LIB,
                         FcPatternAddLangSet,
                         pat.as_mut_ptr(),
-                        attr.name.as_ptr(),
+                        property.name.as_ptr(),
                         self.langset.as_ptr()
                     )
                 }
         }
     }
 
-    macro_rules! attribute {
+    macro_rules! property_decl {
         ($bytes:literal, $name:ident, $vtype:ty, $comment:literal) => {
             /// $comment
-            pub const $name: Attribute<$vtype> = Attribute {
+            pub const $name: Property<$vtype> = Property {
                 name: ::fontconfig_sys::constants::$name,
                 val: PhantomData,
             };
         };
     }
 
-    attribute!(b"family\0", FC_FAMILY, String, "Font family names");
-    attribute!(
+    property_decl!(b"family\0", FC_FAMILY, String, "Font family names");
+    property_decl!(
         b"familylang\0",
         FC_FAMILYLANG,
         String,
         "Language corresponding to each family name"
     );
-    attribute!(
+    property_decl!(
         b"style\0",
         FC_STYLE,
         String,
         "Font style. Overrides weight and slant"
     );
-    attribute!(
+    property_decl!(
         b"stylelang\0",
         FC_STYLELANG,
         String,
         "Language corresponding to each style name"
     );
-    attribute!(
+    property_decl!(
         b"fullname\0",
         FC_FULLNAME,
         String,
         "Font face full name where different from family and family + style"
     );
-    attribute!(
+    property_decl!(
         b"fullnamelang\0",
         FC_FULLNAMELANG,
         String,
         "Language corresponding to each fullname"
     );
-    attribute!(b"slant\0", FC_SLANT, i32, "Italic, oblique or roman");
-    attribute!(
+    property_decl!(b"slant\0", FC_SLANT, i32, "Italic, oblique or roman");
+    property_decl!(
         b"weight\0",
         FC_WEIGHT,
         i32,
         "Light, medium, demibold, bold or black"
     );
-    attribute!(b"width\0", FC_WIDTH, i32, "Condensed, normal or expanded");
-    attribute!(b"size\0", FC_SIZE, f64, "Point size");
-    attribute!(
+    property_decl!(b"width\0", FC_WIDTH, i32, "Condensed, normal or expanded");
+    property_decl!(b"size\0", FC_SIZE, f64, "Point size");
+    property_decl!(
         b"aspect\0",
         FC_ASPECT,
         f64,
         "Stretches glyphs horizontally before hinting"
     );
-    attribute!(b"pixelsize\0", FC_PIXEL_SIZE, f64, "Pixel size");
-    attribute!(
+    property_decl!(b"pixelsize\0", FC_PIXEL_SIZE, f64, "Pixel size");
+    property_decl!(
         b"spacing\0",
         FC_SPACING,
         i32,
         "Proportional, dual-width, monospace or charcell"
     );
-    attribute!(b"foundry\0", FC_FOUNDRY, String, "Font foundry name");
-    attribute!(
+    property_decl!(b"foundry\0", FC_FOUNDRY, String, "Font foundry name");
+    property_decl!(
         b"antialias\0",
         FC_ANTIALIAS,
         bool,
         "Whether glyphs can be antialiased"
     );
-    attribute!(
+    property_decl!(
         b"hintstyle\0",
         FC_HINT_STYLE,
         i32,
         "Automatic hinting style"
     );
-    attribute!(
+    property_decl!(
         b"hinting\0",
         FC_HINTING,
         bool,
         "Whether the rasterizer should use hinting"
     );
-    attribute!(
+    property_decl!(
         b"verticallayout\0",
         FC_VERTICAL_LAYOUT,
         bool,
         "Use vertical layout"
     );
-    attribute!(
+    property_decl!(
         b"autohint\0",
         FC_AUTOHINT,
         bool,
         "Use autohinter instead of normal hinter"
     );
-    attribute!(
+    property_decl!(
         b"globaladvance\0",
         FC_GLOBAL_ADVANCE,
         bool,
         "Use font global advance data (deprecated)"
     );
-    attribute!(
+    property_decl!(
         b"file\0",
         FC_FILE,
         String,
         "The filename holding the font relative to the config's sysroot"
     );
-    attribute!(
+    property_decl!(
         b"index\0",
         FC_INDEX,
         i32,
         "The index of the font within the file"
     );
-    // attribute!(
+    // property_decl!(
     //     b"ftface\0",
     //     FC_FT_FACE,
     //     FT_Face,
     //     "Use the specified FreeType face object"
     // );
-    attribute!(
+    property_decl!(
         b"rasterizer\0",
         FC_RASTERIZER,
         String,
         "Which rasterizer is in use (deprecated)"
     );
-    attribute!(
+    property_decl!(
         b"outline\0",
         FC_OUTLINE,
         bool,
         "Whether the glyphs are outlines"
     );
-    attribute!(
+    property_decl!(
         b"scalable\0",
         FC_SCALABLE,
         bool,
         "Whether glyphs can be scaled"
     );
-    attribute!(b"dpi\0", FC_DPI, f64, "Target dots per inch");
-    attribute!(
+    property_decl!(b"dpi\0", FC_DPI, f64, "Target dots per inch");
+    property_decl!(
         b"rgba\0",
         FC_RGBA,
         i32,
         "unknown, rgb, bgr, vrgb, vbgr, none - subpixel geometry"
     );
-    attribute!(
+    property_decl!(
         b"scale\0",
         FC_SCALE,
         f64,
         "Scale factor for point->pixel conversions (deprecated)"
     );
-    attribute!(
+    property_decl!(
         b"minspace\0",
         FC_MINSPACE,
         bool,
         "Eliminate leading from line spacing"
     );
-    attribute!(
+    property_decl!(
         b"charset\0",
         FC_CHARSET,
         crate::OwnedCharSet,
         "Unicode chars encoded by the font"
     );
-    attribute!(
+    property_decl!(
         b"lang\0",
         FC_LANG,
         crate::LangSet,
         "Set of RFC-3066-style languages this font supports"
     );
-    attribute!(
+    property_decl!(
         b"fontversion\0",
         FC_FONTVERSION,
         i32,
         "Version number of the font"
     );
-    attribute!(
+    property_decl!(
         b"capability\0",
         FC_CAPABILITY,
         String,
         "List of layout capabilities in the font"
     );
-    attribute!(
+    property_decl!(
         b"fontformat\0",
         FC_FONTFORMAT,
         String,
         "String name of the font format"
     );
-    attribute!(
+    property_decl!(
         b"embolden\0",
         FC_EMBOLDEN,
         bool,
         "Rasterizer should synthetically embolden the font"
     );
-    attribute!(
+    property_decl!(
         b"embeddedbitmap\0",
         FC_EMBEDDED_BITMAP,
         bool,
         "Use the embedded bitmap instead of the outline"
     );
-    attribute!(
+    property_decl!(
         b"decorative\0",
         FC_DECORATIVE,
         bool,
         "Whether the style is a decorative variant"
     );
-    attribute!(b"lcdfilter\0", FC_LCD_FILTER, i32, "Type of LCD filter");
-    attribute!(
+    property_decl!(b"lcdfilter\0", FC_LCD_FILTER, i32, "Type of LCD filter");
+    property_decl!(
         b"namelang\0",
         FC_NAMELANG,
         String,
         "Language name to be used for the default value of familylang, stylelang and fullnamelang"
     );
-    attribute!(
+    property_decl!(
         b"fontfeatures\0",
         FC_FONT_FEATURES,
         String,
         "List of extra feature tags in OpenType to be enabled"
     );
-    attribute!(
+    property_decl!(
         b"prgname\0",
         FC_PRGNAME,
         String,
         "Name of the running program"
     );
-    attribute!(
+    property_decl!(
         b"hash\0",
         FC_HASH,
         String,
         "SHA256 hash value of the font data with \"sha256:\" prefix (deprecated)"
     );
-    attribute!(
+    property_decl!(
         b"postscriptname\0",
         FC_POSTSCRIPT_NAME,
         String,
         "Font name in PostScript"
     );
-    attribute!(
+    property_decl!(
         b"symbol\0",
         FC_SYMBOL,
         bool,
         "Whether font uses MS symbol-font encoding"
     );
-    attribute!(b"color\0", FC_COLOR, bool, "Whether any glyphs have color");
-    attribute!(
+    property_decl!(b"color\0", FC_COLOR, bool, "Whether any glyphs have color");
+    property_decl!(
         b"fontvariations\0",
         FC_FONT_VARIATIONS,
         String,
         "comma-separated string of axes in variable font"
     );
-    attribute!(
+    property_decl!(
         b"variable\0",
         FC_VARIABLE,
         bool,
         "Whether font is Variable Font"
     );
-    attribute!(
+    property_decl!(
         b"fonthashint\0",
         FC_FONT_HAS_HINT,
         bool,
         "Whether font has hinting"
     );
-    attribute!(b"order\0", FC_ORDER, i32, "Order number of the font");
+    property_decl!(b"order\0", FC_ORDER, i32, "Order number of the font");
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::pattern::attributes as attrs;
+    use crate::pattern::properties;
 
     #[test]
     fn test_into_inner() {
         let mut pat = super::OwnedPattern::new();
-        pat.add(&attrs::FC_FAMILY, "nomospace".to_string());
+        pat.add(&properties::FC_FAMILY, "nomospace".to_string());
         let pat = pat.into_inner();
         let pat = pat as *mut super::Pattern;
         assert_eq!(
-            unsafe { &*pat }.get(&attrs::FC_FAMILY, 0),
+            unsafe { &*pat }.get(&properties::FC_FAMILY, 0),
             Some("nomospace")
         );
     }
@@ -1114,26 +1110,26 @@ mod tests {
     #[test]
     fn test_get_family() {
         let pat = super::OwnedPattern::new();
-        assert!(pat.get(&attrs::FC_FAMILY, 0).is_none());
+        assert!(pat.get(&properties::FC_FAMILY, 0).is_none());
     }
 
     #[test]
     fn test_get_family_exists() {
         let mut pat = super::OwnedPattern::default();
-        pat.add(&attrs::FC_FAMILY, "nomospace".to_string());
-        assert!(pat.get(&attrs::FC_FAMILY, 0).is_some());
+        pat.add(&properties::FC_FAMILY, "nomospace".to_string());
+        assert!(pat.get(&properties::FC_FAMILY, 0).is_some());
     }
 
     #[test]
     fn test_get_filepath() {
         let mut cfg = crate::FontConfig::default();
         let mut pat = super::OwnedPattern::default();
-        pat.add(&attrs::FC_FAMILY, "nomospace".to_string());
+        pat.add(&properties::FC_FAMILY, "nomospace".to_string());
         cfg.substitute(&mut pat, crate::MatchKind::Pattern);
         let pat = pat.font_match(&mut cfg);
-        let file = pat.get(&attrs::FC_FILE, 0);
+        let file = pat.get(&properties::FC_FILE, 0);
         assert!(file.is_some());
-        let dpi = pat.get(&attrs::FC_DPI, 0);
+        let dpi = pat.get(&properties::FC_DPI, 0);
         println!("{:?}", dpi);
         if let Some(file) = file {
             assert!(file.starts_with("/usr/share/fonts"));

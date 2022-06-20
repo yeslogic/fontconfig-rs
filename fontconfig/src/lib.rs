@@ -78,7 +78,7 @@ pub use langset::{LangSet, LangSetCmp};
 pub use matrix::Matrix;
 pub use objectset::ObjectSet;
 pub use pattern::{
-    attributes, attributes::Attribute, attributes::AttributeType, OwnedPattern, Pattern,
+    properties, properties::Property, properties::PropertyType, OwnedPattern, Pattern,
 };
 pub use strings::FcStr;
 pub use stringset::StringSet;
@@ -282,11 +282,11 @@ impl FontConfig {
     /// optionally filtering by `style`. Both fields are case-insensitive.
     pub fn find(&mut self, family: String, style: Option<String>) -> Option<Font> {
         let mut pat = OwnedPattern::new();
-        pat.add(&attributes::FC_FAMILY, family);
+        pat.add(&properties::FC_FAMILY, family);
 
         if let Some(style) = style {
             let style = style;
-            pat.add(&attributes::FC_STYLE, style);
+            pat.add(&properties::FC_STYLE, style);
         }
 
         let font_match = pat.font_match(self);
@@ -440,7 +440,7 @@ mod tests {
         let mut config = FontConfig::default();
         let mut pat = OwnedPattern::new();
         let family = "dejavu sans".to_string();
-        pat.add(&attributes::FC_FAMILY, family);
+        pat.add(&properties::FC_FAMILY, family);
         let pattern = pat.font_match(&mut config);
         for lang in pattern.lang_set().unwrap().langs().iter() {
             println!("{:?}", lang);
@@ -470,7 +470,7 @@ mod tests {
         let mut config = FontConfig::default();
         let mut pat = OwnedPattern::new();
         let family = "dejavu sans".to_owned();
-        pat.add(&attributes::FC_FAMILY, family);
+        pat.add(&properties::FC_FAMILY, family);
         pat.default_substitute();
         config.substitute(&mut pat, MatchKind::Pattern);
         let font_set = pat.font_sort(&mut config, false).unwrap();

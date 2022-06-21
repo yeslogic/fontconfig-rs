@@ -113,6 +113,7 @@ pub mod constants {
     pub const FC_LCD_LEGACY: c_int = 3;
 
     pub const FC_CHARSET_MAP_SIZE: c_int = 8;
+    pub const FC_CHARSET_DONE: u32 = u32::MAX;
     pub const FC_UTF8_MAX_LEN: c_int = 6;
 
     const_cstr! {
@@ -173,6 +174,7 @@ pub mod constants {
         pub FC_CHAR_WIDTH = "charwidth";
         pub FC_CHAR_HEIGHT = "charheight";
         pub FC_MATRIX = "matrix";
+        pub FC_ORDER = "order";
     }
 }
 
@@ -399,6 +401,8 @@ dlib::external_library!(Fc, "fontconfig",
         fn FcCharSetDestroy(*mut FcCharSet) -> (),
 
         fn FcCharSetAddChar(*mut FcCharSet, FcChar32) -> FcBool,
+
+        fn FcCharSetDelChar(*mut FcCharSet, FcChar32) -> FcBool,
 
         fn FcCharSetCopy(*mut FcCharSet) -> *mut FcCharSet,
 

@@ -11,12 +11,15 @@ addons:
 
 rust:
   - stable
-  - 1.46.0
+  - 1.56.1
 
 before_install:
   - sudo apt-get -y install libfontconfig1-dev jq
+  - rustup component add clippy
 
 script:
+  - cargo clippy
+
   - cargo test
   - |
     if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
@@ -41,3 +44,27 @@ script:
     else
       true
     fi
+
+  - diff -u <(fc-list) <(cargo run --example fc-list)
+
+  - |
+    diff -u \
+    <(fc-list --verbose monospace) \
+    <(cargo run --example fc-list -- --verbose monospace)
+
+  # fc-list with file and lang property
+  - |
+    diff -u \
+    <(fc-list monospace file lang) \
+    <(cargo run --example fc-list -- monospace file lang)
+
+  # fc-pattern with ConfigSubstitute and DefaultSubstitute
+  - |
+    diff -u \
+    <(fc-pattern -d -c monospace) \
+    <(cargo run --example fc-pattern -- -d -c monospace)
+
+  - |
+    diff -u \
+    <(fc-pattern monospace) \
+    <(cargo run --example fc-pattern -- monospace)

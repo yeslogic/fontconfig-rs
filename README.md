@@ -2,15 +2,15 @@ fontconfig
 ==========
 
 <div align="center">
-  <a href="https://travis-ci.com/yeslogic/fontconfig-rs">
-    <img src="https://travis-ci.com/yeslogic/fontconfig-rs.svg?branch=master" alt="Build Status"></a>
-  <a href="https://docs.rs/fontconfig">
+  <a href="https://travis-ci.com/songww/fontconfig-rs">
+    <img src="https://travis-ci.com/songww/fontconfig-rs.svg?branch=master" alt="Build Status"></a>
+  <a href="https://docs.rs/fontconfig-rs">
     <img src="https://docs.rs/fontconfig/badge.svg" alt="Documentation">
   </a>
-  <a href="https://crates.io/crates/fontconfig">
+  <a href="https://crates.io/crates/fontconfig-rs">
     <img src="https://img.shields.io/crates/v/fontconfig.svg" alt="Version">
   </a>
-  <a href="https://github.com/yeslogic/fontconfig-rs/blob/master/LICENSE">
+  <a href="https://github.com/songww/fontconfig-rs/blob/master/LICENSE">
     <img src="https://img.shields.io/crates/l/fontconfig.svg" alt="License">
   </a>
 </div>
@@ -34,11 +34,11 @@ Usage
 `main.rs`:
 
 ```rust
-use fontconfig::Fontconfig;
+use fontconfig::FontConfig;
 
 fn main() {
-    let fc = Fontconfig::new().unwrap();
-    // `Fontconfig::find()` returns `Option` (will rarely be `None` but still could be)
+    let fc = FontConfig::new().unwrap();
+    // `FontConfig::find()` returns `Option` (will rarely be `None` but still could be)
     let font = fc.find("freeserif", None).unwrap();
     // `name` is a `String`, `path` is a `Path`
     println!("Name: {}\nPath: {}", font.name, font.path.display());
@@ -66,16 +66,10 @@ Other Fontconfig Crates
   that needs Fontconfig, but provides less control over the libraries that will
   be used.
 * [fontconfig-sys] — superceded by [yeslogic-fontconfig-sys].
-* [yeslogic-fontconfig] — This crate was previously published under this name before we were given to publish it as [fontconfig].
-
-For our needs in [Prince] we wanted higher-level bindings that did not fall back on vendored versions of libraries, which is what the crates in this repo provide.
+* [fontconfig] — Which crate that we forked from.
 
 Credits
 -------
-
-Thanks to [Austin Bonander][abonander] for originally creating the
-`fontconfig` crate and [allowing us to publish ours under that
-name](https://github.com/abonander/fontconfig-rs/issues/9).
 
 [conrod]: https://github.com/PistonDevelopers/conrod
 [expat-sys]: https://crates.io/crates/expat-sys
@@ -86,8 +80,8 @@ name](https://github.com/abonander/fontconfig-rs/issues/9).
 [Prince]: https://www.princexml.com/
 [servo-fontconfig-sys]: https://crates.io/crates/servo-fontconfig-sys
 [servo-fontconfig]: https://crates.io/crates/servo-fontconfig
-[yeslogic-fontconfig]: https://crates.io/crates/yeslogic-fontconfig
-[yeslogic-fontconfig-sys]: https://crates.io/crates/yeslogic-fontconfig-sys
+[yeslogic-fontconfig]: https://crates.io/crates/songww-fontconfig
+[yeslogic-fontconfig-sys]: https://crates.io/crates/songww-fontconfig-sys
 [abonander]: https://github.com/abonander
 [dlopen]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/dlopen.html
 [dlib]: https://crates.io/crates/dlib

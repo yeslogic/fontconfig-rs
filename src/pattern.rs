@@ -1,6 +1,7 @@
 //!
 use std::borrow::{Borrow, BorrowMut};
 use std::ffi::{CStr, CString};
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_char;
@@ -315,6 +316,10 @@ impl Pattern {
         self.get(&properties::FC_FONTFORMAT, 0)
             .ok_or_else(|| Error::UnknownFontFormat(String::new()))
             .and_then(|format| format.parse())
+    }
+
+    pub fn hash(&self) -> u32 {
+        unsafe { ffi_dispatch!(LIB, FcPatternHash, self.as_ptr() as *mut _) }
     }
 
     /// Returns a raw pointer to underlying [`sys::FcPattern`].

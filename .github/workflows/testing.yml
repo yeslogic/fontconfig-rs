@@ -87,9 +87,10 @@ jobs:
           <(cargo run --example fc-list -- monospace file lang)
 
     - name: fc-pattern with ConfigSubstitute and DefaultSubstitute
-      run: diff -u \
-            <(fc-pattern -d -c monospace) \
-            <(cargo run --example fc-pattern -- -d -c monospace)
+      run: |
+        diff -u \
+          <(fc-pattern -d -c monospace) \
+          <(cargo run --example fc-pattern -- -d -c monospace)
 
     - name: fc-pattern
       run: |

@@ -1,0 +1,98 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  testing:
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, ubuntu-latest]
+        toolchain: [1.56.1, stable, nightly]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install clippy
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.toolchain }}
+        components: clippy
+        override: true
+    - name: Install libfontconfig1-dev and jq
+      run: sudo apt-get install -y libfontconfig1-dev jq
+
+    - uses: actions-rs/clippy-check@v1
+      name: Run clippy
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        args: --all-features
+
+    - uses: actions-rs/cargo@v1
+      name: Run tests
+      with:
+        command: test
+        args: --tests
+
+    - name: Run ldd-grep
+      if: ${{ matrix.toolchain }} == "stable"
+      run: ./ci/ldd-grep
+
+    - uses: actions-rs/cargo@v1
+      name: Run tests with dlopen
+      with:
+        command: test
+        args: --tests --features dlopen
+
+    - name: Run ldd-grep with dlopen
+      if: ${{ matrix.toolchain }} == "stable"
+      run: ./ci/ldd-grep -v -- --features dlopen
+
+    - name: Run tests with dlopen from env
+      uses: actions-rs/cargo@v1
+      env:
+        RUST_FONTCONFIG_DLOPEN: on
+      with:
+        command: test
+        args: --tests
+
+    - name: Run ldd-grep with dlopen from env
+      env:
+        RUST_FONTCONFIG_DLOPEN: on
+      if: ${{ matrix.toolchain }} == "stable"
+      run: ./ci/ldd-grep -v
+
+    - name: fc-list
+      run: diff -u --color=always <(fc-list) <(cargo run --example fc-list)
+
+    - name: fc-list monospace
+      run: |
+        diff -u \
+          <(fc-list --verbose monospace) \
+          <(cargo run --example fc-list -- --verbose monospace)
+
+    - name: fc-list with file and lang property
+      run: |
+        diff -u \
+          <(fc-list monospace file lang) \
+          <(cargo run --example fc-list -- monospace file lang)
+
+    - name: fc-pattern with ConfigSubstitute and DefaultSubstitute
+      run: diff -u \
+            <(fc-pattern -d -c monospace) \
+            <(cargo run --example fc-pattern -- -d -c monospace)
+
+    - name: fc-pattern
+      run: |
+        diff -u \
+          <(fc-pattern monospace) \
+          <(cargo run --example fc-pattern -- monospace)

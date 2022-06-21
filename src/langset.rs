@@ -16,7 +16,7 @@ use crate::{CharSet, FcTrue, StringSet};
 
 /// The results of comparing two language strings in [`LangSet`] objects.
 #[doc(alias = "FcLangResult")]
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LangSetCmp {
     /// The objects match language and territory
     #[doc(alias = "FcLangEqual")]
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn push() {
         let mut langset = LangSet::new();
-        langset.push(&CStr::from_bytes_with_nul(b"en\0").unwrap());
+        langset.push(CStr::from_bytes_with_nul(b"en\0").unwrap());
         assert_eq!(langset.langs().iter().count(), 1);
         let langs = langset.langs();
         let mut langs = langs.iter();
@@ -208,35 +208,35 @@ mod tests {
     fn debug() {
         let mut langset = LangSet::new();
         assert_eq!(format!("{:?}", langset), "LangSet { langs: {} }");
-        langset.push(&CStr::from_bytes_with_nul(b"en\0").unwrap());
+        langset.push(CStr::from_bytes_with_nul(b"en\0").unwrap());
         assert_eq!(format!("{:?}", langset), "LangSet { langs: {\"en\"} }");
     }
 
     #[test]
     fn contains() {
         let mut langset = LangSet::new();
-        langset.push(&CStr::from_bytes_with_nul(b"en\0").unwrap());
-        langset.push(&CStr::from_bytes_with_nul(b"zh\0").unwrap());
+        langset.push(CStr::from_bytes_with_nul(b"en\0").unwrap());
+        langset.push(CStr::from_bytes_with_nul(b"zh\0").unwrap());
         let mut langset2 = LangSet::new();
-        langset2.push(&CStr::from_bytes_with_nul(b"en\0").unwrap());
-        assert_eq!(langset.contains(&langset2), true);
-        assert_eq!(langset2.contains(&langset), false);
-        langset2.push(&CStr::from_bytes_with_nul(b"fr\0").unwrap());
-        assert_eq!(langset.contains(&langset2), false);
+        langset2.push(CStr::from_bytes_with_nul(b"en\0").unwrap());
+        assert!(langset.contains(&langset2));
+        assert!(!langset2.contains(&langset));
+        langset2.push(CStr::from_bytes_with_nul(b"fr\0").unwrap());
+        assert!(!langset.contains(&langset2));
     }
 
     #[test]
     fn compare() {
         let mut langset = LangSet::new();
-        langset.push(&CStr::from_bytes_with_nul(b"en-US\0").unwrap());
+        langset.push(CStr::from_bytes_with_nul(b"en-US\0").unwrap());
         let mut langset2 = LangSet::new();
-        langset2.push(&CStr::from_bytes_with_nul(b"en-UK\0").unwrap());
+        langset2.push(CStr::from_bytes_with_nul(b"en-UK\0").unwrap());
         assert_eq!(langset.cmp(&langset2), LangSetCmp::DifferentTerritory);
         let mut langset3 = LangSet::new();
-        langset3.push(&CStr::from_bytes_with_nul(b"en-US\0").unwrap());
+        langset3.push(CStr::from_bytes_with_nul(b"en-US\0").unwrap());
         assert_eq!(langset3.cmp(&langset), LangSetCmp::Equal);
         let mut langset4 = LangSet::new();
-        langset4.push(&CStr::from_bytes_with_nul(b"fr\0").unwrap());
+        langset4.push(CStr::from_bytes_with_nul(b"fr\0").unwrap());
         assert_eq!(langset3.cmp(&langset4), LangSetCmp::DifferentLang);
     }
 
@@ -244,7 +244,7 @@ mod tests {
     fn charset() {
         use crate::OwnedCharSet;
 
-        let charset = LangSet::charset(&CStr::from_bytes_with_nul(b"en\0").unwrap());
+        let charset = LangSet::charset(CStr::from_bytes_with_nul(b"en\0").unwrap());
         let mut cs = OwnedCharSet::new();
         for c in [
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
@@ -262,7 +262,7 @@ mod tests {
             charset.iter().collect::<Vec<_>>()
         );
         assert!(charset.is_subset(&cs));
-        assert!(cs.is_subset(&charset));
+        assert!(cs.is_subset(charset));
         assert_eq!(charset, cs.as_ref());
     }
 }

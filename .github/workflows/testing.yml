@@ -45,7 +45,7 @@ jobs:
 
     - name: Run ldd-grep
       if: ${{ matrix.toolchain }} == "stable"
-      run: ./ci/ldd-grep
+      run: ./.github/bin/ldd-grep
 
     - uses: actions-rs/cargo@v1
       name: Run tests with dlopen
@@ -55,7 +55,7 @@ jobs:
 
     - name: Run ldd-grep with dlopen
       if: ${{ matrix.toolchain }} == "stable"
-      run: ./ci/ldd-grep -v -- --features dlopen
+      run: ./.github/bin/ldd-grep -v -- --features dlopen
 
     - name: Run tests with dlopen from env
       uses: actions-rs/cargo@v1
@@ -69,7 +69,7 @@ jobs:
       env:
         RUST_FONTCONFIG_DLOPEN: on
       if: ${{ matrix.toolchain }} == "stable"
-      run: ./ci/ldd-grep -v
+      run: ./.github/bin/ldd-grep -v
 
     - name: fc-list
       run: diff -u --color=always <(fc-list) <(cargo run --example fc-list)

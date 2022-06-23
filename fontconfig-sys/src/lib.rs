@@ -779,6 +779,8 @@ dlib::external_library!(Fc, "fontconfig",
             *mut *mut FcLangSet
         ) -> FcResult,
 
+        fn FcPatternGetFTFace(*mut FcPattern, *const c_char, c_int, *mut *mut c_void) -> FcResult,
+
         // fn FcPatternVaBuild(*mut FcPattern, *mut __va_list_tag) -> *mut FcPattern,
 
         fn FcPatternFormat(*mut FcPattern, *const FcChar8) -> *mut FcChar8,

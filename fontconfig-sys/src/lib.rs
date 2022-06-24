@@ -779,6 +779,9 @@ dlib::external_library!(Fc, "fontconfig",
             *mut *mut FcLangSet
         ) -> FcResult,
 
+        // The last argument is a pointer to a FreeType Face object (`FT_Face *`)
+        //
+        // <https://freetype.org/freetype2/docs/reference/ft2-base_interface.html#ft_face>
         fn FcPatternGetFTFace(*mut FcPattern, *const c_char, c_int, *mut *mut c_void) -> FcResult,
 
         // fn FcPatternVaBuild(*mut FcPattern, *mut __va_list_tag) -> *mut FcPattern,

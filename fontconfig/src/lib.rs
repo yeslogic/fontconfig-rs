@@ -134,6 +134,8 @@ pub struct Font {
     pub name: String,
     /// The location of this font on the filesystem.
     pub path: PathBuf,
+    /// The index of the font within the file.
+    pub index: Option<i32>,
 }
 
 impl Font {
@@ -153,6 +155,7 @@ impl Font {
             font_match.filename().map(|filename| Font {
                 name: name.to_owned(),
                 path: PathBuf::from(filename),
+                index: font_match.face_index(),
             })
         })
     }

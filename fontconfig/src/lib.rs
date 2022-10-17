@@ -162,7 +162,12 @@ impl Font {
 
     #[allow(dead_code)]
     fn print_debug(&self) {
-        println!("Name: {}\nPath: {}", self.name, self.path.display());
+        println!(
+            "Name: {}\nPath: {}\nIndex: {:?}",
+            self.name,
+            self.path.display(),
+            self.index
+        );
     }
 }
 

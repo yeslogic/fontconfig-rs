@@ -11,7 +11,7 @@ addons:
 
 rust:
   - stable
-  - 1.46.0
+  - 1.56.0
 
 before_install:
   - sudo apt-get -y install libfontconfig1-dev jq

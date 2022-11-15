@@ -1,6 +1,6 @@
 [package]
 name = "yeslogic-fontconfig-sys"
-version = "4.0.0"
+version = "4.0.1"
 edition = "2018"
 rust-version = "1.56"
 authors = [

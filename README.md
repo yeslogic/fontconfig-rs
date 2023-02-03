@@ -17,7 +17,7 @@ fontconfig
 
 <br>
 
-A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating fonts on a UNIX like systems such as Linux and FreeBSD. Requires Fontconfig to be installed.
+A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating fonts on UNIX-like systems such as Linux and BSD. Requires Fontconfig to be installed.
 
 Dependencies
 ------------

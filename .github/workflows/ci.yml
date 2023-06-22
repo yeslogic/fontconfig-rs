@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: ["master"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "yeslogic-fontconfig-sys-[0-9]+.[0-9]+.[0-9]+"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  ci:
+    strategy:
+      matrix:
+        rust: [stable, 1.56.0]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+      - run: sudo apt-get -y install libfontconfig1-dev jq
+      - run: cargo test
+      - run: |
+             if [ "${{matrix.rust}}" = "stable" ]; then
+               ./ci/ldd-grep
+             else
+               true
+             fi
+      - run: cargo test --features dlopen --manifest-path fontconfig/Cargo.toml
+      - run: |
+             if [ "${{matrix.rust}}" = "stable" ]; then
+               ./ci/ldd-grep -v -- --features dlopen
+             else
+               true
+             fi
+      - run: RUST_FONTCONFIG_DLOPEN=on cargo test
+      - run: |
+             if [ "${{matrix.rust}}" = "stable" ]; then
+               RUST_FONTCONFIG_DLOPEN=on ./ci/ldd-grep -v
+             else
+               true
+             fi

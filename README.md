@@ -2,8 +2,8 @@ fontconfig
 ==========
 
 <div align="center">
-  <a href="https://travis-ci.com/yeslogic/fontconfig-rs">
-    <img src="https://travis-ci.com/yeslogic/fontconfig-rs.svg?branch=master" alt="Build Status"></a>
+  <a href="https://github.com/yeslogic/fontconfig-rs/actions/workflows/ci.yml">
+    <img src="https://github.com/yeslogic/fontconfig-rs/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
   <a href="https://docs.rs/fontconfig">
     <img src="https://docs.rs/fontconfig/badge.svg" alt="Documentation">
   </a>

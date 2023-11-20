@@ -24,7 +24,7 @@ links = "fontconfig"
 name = "fontconfig_sys"
 
 [dependencies]
-const-cstr = "0.3"
+cstr = "0.2.11"
 dlib = "0.5.0"
 # This can't be optional because build.rs can't conditionally enable an
 # optional dependency:

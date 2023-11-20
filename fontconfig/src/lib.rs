@@ -142,11 +142,11 @@ impl Font {
     fn find(fc: &Fontconfig, family: &str, style: Option<&str>) -> Option<Font> {
         let mut pat = Pattern::new(fc);
         let family = CString::new(family).ok()?;
-        pat.add_string(FC_FAMILY.as_cstr(), &family);
+        pat.add_string(FC_FAMILY, &family);
 
         if let Some(style) = style {
             let style = CString::new(style).ok()?;
-            pat.add_string(FC_STYLE.as_cstr(), &style);
+            pat.add_string(FC_STYLE, &style);
         }
 
         let font_match = pat.font_match();
@@ -298,37 +298,37 @@ impl<'fc> Pattern<'fc> {
 
     /// Get the "fullname" (human-readable name) of this pattern.
     pub fn name(&self) -> Option<&str> {
-        self.get_string(FC_FULLNAME.as_cstr())
+        self.get_string(FC_FULLNAME)
     }
 
     /// Get the "file" (path on the filesystem) of this font pattern.
     pub fn filename(&self) -> Option<&str> {
-        self.get_string(FC_FILE.as_cstr())
+        self.get_string(FC_FILE)
     }
 
     /// Get the "index" (The index of the font within the file) of this pattern.
     pub fn face_index(&self) -> Option<i32> {
-        self.get_int(FC_INDEX.as_cstr())
+        self.get_int(FC_INDEX)
     }
 
     /// Get the "slant" (Italic, oblique or roman) of this pattern.
     pub fn slant(&self) -> Option<i32> {
-        self.get_int(FC_SLANT.as_cstr())
+        self.get_int(FC_SLANT)
     }
 
     /// Get the "weight" (Light, medium, demibold, bold or black) of this pattern.
     pub fn weight(&self) -> Option<i32> {
-        self.get_int(FC_WEIGHT.as_cstr())
+        self.get_int(FC_WEIGHT)
     }
 
     /// Get the "width" (Condensed, normal or expanded) of this pattern.
     pub fn width(&self) -> Option<i32> {
-        self.get_int(FC_WIDTH.as_cstr())
+        self.get_int(FC_WIDTH)
     }
 
     /// Get the "fontformat" ("TrueType" "Type 1" "BDF" "PCF" "Type 42" "CID Type 1" "CFF" "PFR" "Windows FNT") of this pattern.
     pub fn format(&self) -> Result<FontFormat, UnknownFontFormat> {
-        self.get_string(FC_FONTFORMAT.as_cstr())
+        self.get_string(FC_FONTFORMAT)
             .ok_or_else(|| UnknownFontFormat(String::new()))
             .and_then(|format| format.parse())
     }
@@ -377,7 +377,15 @@ impl Pattern<'_> {
     pub fn lang_set(&self) -> Option<StrList<'_>> {
         unsafe {
             let mut ret: *mut sys::FcLangSet = ptr::null_mut();
-            if ffi_dispatch!(LIB, FcPatternGetLangSet, self.pat, FC_LANG.as_ptr(), 0, &mut ret as *mut _) == sys::FcResultMatch {
+            if ffi_dispatch!(
+                LIB,
+                FcPatternGetLangSet,
+                self.pat,
+                FC_LANG.as_ptr(),
+                0,
+                &mut ret as *mut _
+            ) == sys::FcResultMatch
+            {
                 let ss: *mut sys::FcStrSet = ffi_dispatch!(LIB, FcLangSetGetLangs, ret);
                 let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
                 Some(StrList::from_raw(self.fc, lang_strs))
@@ -593,7 +601,7 @@ mod tests {
         let fc = Fontconfig::new().unwrap();
         let mut pat = Pattern::new(&fc);
         let family = CString::new("dejavu sans").unwrap();
-        pat.add_string(FC_FAMILY.as_cstr(), &family);
+        pat.add_string(FC_FAMILY, &family);
         let pattern = pat.font_match();
         for lang in pattern.lang_set().unwrap() {
             println!("{:?}", lang);

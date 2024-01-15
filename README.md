@@ -65,7 +65,7 @@ Other Fontconfig Crates
   version of Expat. This makes it easier if you are distributing a code base
   that needs Fontconfig, but provides less control over the libraries that will
   be used.
-* [fontconfig-sys] — superceded by [yeslogic-fontconfig-sys].
+* [fontconfig-sys] — superseded by [yeslogic-fontconfig-sys].
 * [yeslogic-fontconfig] — This crate was previously published under this name before we were given to publish it as [fontconfig].
 
 For our needs in [Prince] we wanted higher-level bindings that did not fall back on vendored versions of libraries, which is what the crates in this repo provide.

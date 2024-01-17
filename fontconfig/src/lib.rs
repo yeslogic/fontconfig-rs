@@ -54,7 +54,7 @@ use sys::statics::{LIB, LIB_RESULT};
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
-use std::ffi::{CStr, CString};
+use std::ffi::{c_int, CStr, CString};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_char;
@@ -199,7 +199,7 @@ impl<'fc> Pattern<'fc> {
         Pattern { pat, fc }
     }
 
-    /// Add a key-value pair to this pattern.
+    /// Add a key-value pair of type `String` to this pattern.
     ///
     /// See useful keys in the [fontconfig reference][1].
     ///
@@ -213,6 +213,17 @@ impl<'fc> Pattern<'fc> {
                 name.as_ptr(),
                 val.as_ptr() as *const u8
             );
+        }
+    }
+
+    /// Add a key-value pair of type `Int` to this pattern
+    ///
+    /// See useful keys in the [fontconfig reference][1].
+    ///
+    /// [1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/x19.html
+    pub fn add_integer(&mut self, name: &CStr, val: c_int) {
+        unsafe {
+            ffi_dispatch!(LIB, FcPatternAddInteger, self.pat, name.as_ptr(), val);
         }
     }
 
@@ -507,6 +518,31 @@ pub fn list_fonts<'fc>(pattern: &Pattern<'fc>, objects: Option<&ObjectSet>) -> F
     let os = objects.map(|o| o.fcset).unwrap_or(ptr::null_mut());
     unsafe {
         let raw_set = ffi_dispatch!(LIB, FcFontList, ptr::null_mut(), pattern.pat, os);
+        FontSet::from_raw(pattern.fc, raw_set)
+    }
+}
+
+/// Returns a [`FontSet`] containing fonts sorted by closeness to the supplied `pattern`. If `trim` is true, elements in
+/// the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
+///
+/// See the [fontconfig reference][1] for more details.
+///
+/// [1]: https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcfontsort.html
+pub fn sort_fonts<'fc>(pattern: &Pattern<'fc>, trim: bool) -> FontSet<'fc> {
+    // FcFontSort always returns a (possibly empty) set so we don't need to check this.
+    let mut res = sys::FcResultNoMatch;
+    let unicode_coverage = ptr::null_mut();
+    let config = ptr::null_mut();
+    unsafe {
+        let raw_set = ffi_dispatch!(
+            LIB,
+            FcFontSort,
+            config,
+            pattern.pat,
+            trim as FcBool,
+            unicode_coverage,
+            &mut res
+        );
         FontSet::from_raw(pattern.fc, raw_set)
     }
 }

@@ -63,7 +63,7 @@ Other Fontconfig Crates
   that needs Fontconfig, but provides less control over the libraries that will
   be used.
 * [fontconfig-sys] — superseded by [yeslogic-fontconfig-sys].
-* [yeslogic-fontconfig] — This crate was previously published under this name before we were given to publish it as [fontconfig].
+* [yeslogic-fontconfig] — This crate was previously published under this name before we were given access to publish it as [fontconfig].
 
 For our needs in [Prince] we wanted higher-level bindings that did not fall back on vendored versions of libraries, which is what the crates in this repo provide.
 

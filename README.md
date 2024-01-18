@@ -5,14 +5,11 @@ fontconfig
   <a href="https://github.com/yeslogic/fontconfig-rs/actions/workflows/ci.yml">
     <img src="https://github.com/yeslogic/fontconfig-rs/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
   <a href="https://docs.rs/fontconfig">
-    <img src="https://docs.rs/fontconfig/badge.svg" alt="Documentation">
-  </a>
+    <img src="https://docs.rs/fontconfig/badge.svg" alt="Documentation"></a>
   <a href="https://crates.io/crates/fontconfig">
-    <img src="https://img.shields.io/crates/v/fontconfig.svg" alt="Version">
-  </a>
+    <img src="https://img.shields.io/crates/v/fontconfig.svg" alt="Version"></a>
   <a href="https://github.com/yeslogic/fontconfig-rs/blob/master/LICENSE">
-    <img src="https://img.shields.io/crates/l/fontconfig.svg" alt="License">
-  </a>
+    <img src="https://img.shields.io/crates/l/fontconfig.svg" alt="License"></a>
 </div>
 
 <br>

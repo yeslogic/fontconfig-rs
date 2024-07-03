@@ -1,8 +1,8 @@
 [package]
 name = "yeslogic-fontconfig-sys"
-version = "5.0.0"
-edition = "2018"
-rust-version = "1.64"
+version = "6.0.0"
+edition = "2021"
+rust-version = "1.77"
 authors = [
     "Austin Bonander <austin.bonander@gmail.com>",
     "The Servo Project Developers",
@@ -24,7 +24,6 @@ links = "fontconfig"
 name = "fontconfig_sys"
 
 [dependencies]
-cstr = "0.2.11"
 dlib = "0.5.0"
 # This can't be optional because build.rs can't conditionally enable an
 # optional dependency:

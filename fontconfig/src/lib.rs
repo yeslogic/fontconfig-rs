@@ -295,8 +295,8 @@ impl<'fc> Pattern<'fc> {
 
     /// Get the best available match for this pattern, returned as a new pattern.
     pub fn font_match(&mut self) -> Pattern {
-        self.default_substitute();
         self.config_substitute();
+        self.default_substitute();
 
         unsafe {
             let mut res = sys::FcResultNoMatch;

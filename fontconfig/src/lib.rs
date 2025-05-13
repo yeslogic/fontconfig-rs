@@ -324,6 +324,38 @@ impl<'fc> Pattern<'fc> {
         }
     }
 
+    /// Returns a [`FontSet`] containing fonts sorted by closeness to this pattern.
+    ///
+    /// If `trim` is true, elements in the list which don't include Unicode coverage not provided by
+    /// earlier elements in the list are elided.
+    ///
+    /// See the [Fontconfig reference][1] for more details.
+    ///
+    /// [1]: https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcfontsort.html
+    pub fn sort_fonts(&mut self, trim: bool) -> FontSet<'fc> {
+        // Docs: This function should be called only after FcConfigSubstitute and FcDefaultSubstitute
+        // have been called for p; otherwise the results will not be correct.
+        self.config_substitute();
+        self.default_substitute();
+
+        // FcFontSort always returns a (possibly empty) set so we don't need to check this.
+        let mut res = sys::FcResultNoMatch;
+        let unicode_coverage = ptr::null_mut();
+        let config = ptr::null_mut();
+        unsafe {
+            let raw_set = ffi_dispatch!(
+                LIB,
+                FcFontSort,
+                config,
+                self.pat,
+                trim as FcBool,
+                unicode_coverage,
+                &mut res
+            );
+            FontSet::from_raw(self.fc, raw_set)
+        }
+    }
+
     /// Get the "fullname" (human-readable name) of this pattern.
     pub fn name(&self) -> Option<&str> {
         self.get_string(FC_FULLNAME)
@@ -539,31 +571,6 @@ pub fn list_fonts<'fc>(pattern: &Pattern<'fc>, objects: Option<&ObjectSet>) -> F
     }
 }
 
-/// Returns a [`FontSet`] containing fonts sorted by closeness to the supplied `pattern`. If `trim` is true, elements in
-/// the list which don't include Unicode coverage not provided by earlier elements in the list are elided.
-///
-/// See the [fontconfig reference][1] for more details.
-///
-/// [1]: https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcfontsort.html
-pub fn sort_fonts<'fc>(pattern: &Pattern<'fc>, trim: bool) -> FontSet<'fc> {
-    // FcFontSort always returns a (possibly empty) set so we don't need to check this.
-    let mut res = sys::FcResultNoMatch;
-    let unicode_coverage = ptr::null_mut();
-    let config = ptr::null_mut();
-    unsafe {
-        let raw_set = ffi_dispatch!(
-            LIB,
-            FcFontSort,
-            config,
-            pattern.pat,
-            trim as FcBool,
-            unicode_coverage,
-            &mut res
-        );
-        FontSet::from_raw(pattern.fc, raw_set)
-    }
-}
-
 /// Wrapper around `FcObjectSet`.
 pub struct ObjectSet {
     fcset: *mut sys::FcObjectSet,
@@ -670,5 +677,25 @@ mod tests {
         // Test collect
         let langs = pattern.lang_set().unwrap().collect::<Vec<_>>();
         assert!(langs.iter().find(|&&l| l == "ie").is_some());
+    }
+
+    #[test]
+    fn test_sort_fonts() {
+        let fc = Fontconfig::new().unwrap();
+        let mut pat = Pattern::new(&fc);
+        let family = CString::new("dejavu sans").unwrap();
+        pat.add_string(FC_FAMILY, &family);
+
+        let style = CString::new("oblique").unwrap();
+        pat.add_string(FC_STYLE, &style);
+
+        let font_set = pat.sort_fonts(false);
+
+        for pattern in font_set.iter() {
+            println!("{:?}", pattern.name());
+        }
+
+        // Ensure that the set can be iterated again
+        assert!(font_set.iter().count() > 0);
     }
 }

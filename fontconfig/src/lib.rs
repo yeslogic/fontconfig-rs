@@ -275,13 +275,30 @@ impl<'fc> Pattern<'fc> {
         }
     }
 
-    fn default_substitute(&mut self) {
+    /// Supplies default values for underspecified font patterns.
+    ///
+    /// * Patterns without a specified style or weight are set to Medium.
+    /// * Patterns without a specified style or slant are set to Roman.
+    /// * Patterns without a specified pixel size are given one computed from any specified point size
+    ///   (default 12), dpi (default 75) and scale (default 1).
+    ///
+    /// *Note:* [font_match][Self::font_match] and [sort_fonts][Self::sort_fonts] call this so you
+    /// don't need to manually call it when using those methods.
+    ///
+    /// [Fontconfig reference](https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcdefaultsubstitute.html)
+    pub fn default_substitute(&mut self) {
         unsafe {
             ffi_dispatch!(LIB, FcDefaultSubstitute, self.pat);
         }
     }
 
-    fn config_substitute(&mut self) {
+    /// Execute substitutions.
+    ///
+    /// *Note:* [font_match][Self::font_match] and [sort_fonts][Self::sort_fonts] call this so you
+    /// don't need to manually call it when using those methods.
+    ///
+    /// [Fontconfig reference](https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcconfigsubstitute.html)
+    pub fn config_substitute(&mut self) {
         unsafe {
             ffi_dispatch!(
                 LIB,

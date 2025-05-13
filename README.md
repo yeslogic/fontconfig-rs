@@ -19,10 +19,13 @@ A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating 
 Dependencies
 ------------
 
+This crate is a wrapper around the Fontconfig C-library, thus it must be installed. If your OS has separate `dev`/`devel` packages, then you will need to install the that version of the package. Below is the package name for a few operating systems. If your system is not listed, a search of your package repository for `fontconfig` should find what you need.
+
 * Alpine Linux: `fontconfig-dev`
 * Arch Linux: `fontconfig`
 * Debian-based systems: `libfontconfig1-dev`
 * FreeBSD: `fontconfig`
+* Nix: `fontconfig`
 * Void Linux: `fontconfig-devel`
 
 Usage

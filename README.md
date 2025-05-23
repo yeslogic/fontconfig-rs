@@ -25,7 +25,7 @@ This crate is a wrapper around the Fontconfig C-library, thus it must be install
 * Arch Linux: `fontconfig`
 * Debian-based systems: `libfontconfig1-dev`
 * FreeBSD: `fontconfig`
-* Nix: `fontconfig`
+* Nix: `fontconfig`, `pkg-config` (tested on nixos-unstable)
 * Void Linux: `fontconfig-devel`
 
 Usage

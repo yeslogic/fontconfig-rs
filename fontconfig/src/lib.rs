@@ -54,10 +54,10 @@ use sys::statics::{LIB, LIB_RESULT};
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
+use core::ffi::c_char;
 use std::ffi::{c_int, CStr, CString};
 use std::marker::PhantomData;
 use std::mem;
-use std::os::raw::c_char;
 use std::path::PathBuf;
 use std::ptr;
 use std::str::FromStr;

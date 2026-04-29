@@ -548,7 +548,13 @@ impl<'fc> FontSet<'fc> {
     pub fn iter(&self) -> impl Iterator<Item = Pattern<'_>> {
         let patterns = unsafe {
             let fontset = self.fcset;
-            std::slice::from_raw_parts((*fontset).fonts, (*fontset).nfont as usize)
+            // The set may be empty, in which case .fonts is NULL, but slices require
+            // the pointers to be non-NULL.
+            if (*fontset).nfont > 0 {
+                std::slice::from_raw_parts((*fontset).fonts, (*fontset).nfont as usize)
+            } else {
+                &[]
+            }
         };
         patterns
             .iter()
@@ -654,6 +660,19 @@ mod tests {
 
         // Ensure that the set can be iterated again
         assert!(fontset.iter().count() > 0);
+    }
+
+    #[test]
+    fn test_empty_font_set() {
+        let fc = Fontconfig::new().unwrap();
+        let mut pat = Pattern::new(&fc);
+        let family = CString::new("xxx yyy zzz does not exist").unwrap();
+        pat.add_string(FC_FAMILY, &family);
+
+        let fontset = list_fonts(&pat, None);
+        // Prior to a bug fix this would fail when the set was empty due to trying
+        // to create a slice from a NULL pointer (FcSet.fonts).
+        assert_eq!(fontset.iter().count(), 0);
     }
 
     #[test]

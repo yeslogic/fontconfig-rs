@@ -181,7 +181,7 @@ pub struct Pattern<'fc> {
 
 impl<'fc> Pattern<'fc> {
     /// Create a new empty `Pattern`.
-    pub fn new(fc: &Fontconfig) -> Pattern {
+    pub fn new(fc: &Fontconfig) -> Pattern<'_> {
         let pat = unsafe { ffi_dispatch!(LIB, FcPatternCreate,) };
         assert!(!pat.is_null());
 
@@ -193,7 +193,7 @@ impl<'fc> Pattern<'fc> {
     /// The pattern is referenced.
     ///
     /// **Safety:** The pattern pointer must be valid/non-null.
-    pub unsafe fn from_pattern(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern {
+    pub unsafe fn from_pattern(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern<'_> {
         ffi_dispatch!(LIB, FcPatternReference, pat);
 
         Pattern { pat, fc }
@@ -311,7 +311,7 @@ impl<'fc> Pattern<'fc> {
     }
 
     /// Get the best available match for this pattern, returned as a new pattern.
-    pub fn font_match(&mut self) -> Pattern {
+    pub fn font_match(&mut self) -> Pattern<'_> {
         self.config_substitute();
         self.default_substitute();
 
@@ -517,7 +517,7 @@ pub struct FontSet<'fc> {
 
 impl<'fc> FontSet<'fc> {
     /// Create a new, empty `FontSet`.
-    pub fn new(fc: &Fontconfig) -> FontSet {
+    pub fn new(fc: &Fontconfig) -> FontSet<'_> {
         let fcset = unsafe { ffi_dispatch!(LIB, FcFontSetCreate,) };
         FontSet { fcset, fc }
     }
@@ -527,7 +527,7 @@ impl<'fc> FontSet<'fc> {
     /// The returned wrapper assumes ownership of the `FcFontSet`.
     ///
     /// **Safety:** The font set pointer must be valid/non-null.
-    pub unsafe fn from_raw(fc: &Fontconfig, raw_set: *mut sys::FcFontSet) -> FontSet {
+    pub unsafe fn from_raw(fc: &Fontconfig, raw_set: *mut sys::FcFontSet) -> FontSet<'_> {
         FontSet { fcset: raw_set, fc }
     }
 

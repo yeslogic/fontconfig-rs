@@ -641,22 +641,32 @@ impl FromStr for FontFormat {
 
 /// A safe wrapper around fontconfig's `FcCharSet`
 #[repr(C)]
-pub struct CharSet {
+pub struct CharSet<'fc> {
     char_set: *mut FcCharSet,
+    fc: &'fc Fontconfig,
 }
 
-impl CharSet {
-    /// Creates an empt char set by calling `FcCharSetCreate()`
-    pub fn create() -> Self {
-        unsafe {
-            Self { char_set: ffi_dispatch!(LIB, FcCharSetCreate,) }
-        }
+impl<'fc> CharSet<'fc> {
+    /// Creates an empty char set by calling `FcCharSetCreate()`
+    pub fn new(fc: &'fc Fontconfig) -> Self {
+        let char_set = unsafe {ffi_dispatch!(LIB, FcCharSetCreate,)};
+        assert!(!char_set.is_null());
+
+        Self { char_set, fc }
     }
 
     /// Add specified char to the charset
-    pub fn add_char(&mut self, c: char) {
+    pub fn add_char(&mut self, c: char) ->  bool {
         unsafe {
-            ffi_dispatch!(LIB, FcCharSetAddChar, self.char_set, c as u32);
+            ffi_dispatch!(LIB, FcCharSetAddChar, self.char_set, c as u32) != 0
+        }
+    }
+}
+
+impl<'fc> Drop for CharSet<'fc> {
+    fn drop(&mut self) {
+        unsafe {
+            ffi_dispatch!(LIB, FcCharSetDestroy, self.char_set);
         }
     }
 }
@@ -745,5 +755,34 @@ mod tests {
 
         // Ensure that the set can be iterated again
         assert!(font_set.iter().count() > 0);
+    }
+
+    #[test]
+    fn finds_font_containing_charset() {
+        let fc = Fontconfig::new().unwrap();
+        let mut pat = Pattern::new(&fc);
+        let mut char_set = CharSet::new(&fc);
+        char_set.add_char('a');
+        pat.add_charset(char_set);
+        let font_set = list_fonts(&pat, None);
+
+        // Should find at least one font
+        assert!(font_set.iter().count() > 0);
+    }
+
+    #[test]
+    fn does_not_find_missing_charset() {
+        let fc = Fontconfig::new().unwrap();
+        let mut pat = Pattern::new(&fc);
+        let mut char_set = CharSet::new(&fc);
+        // DejaVu Sans does not support CJK so try finding it for the following U+5317
+        char_set.add_char('北');
+        let family = CString::new("dejavu sans").unwrap();
+        pat.add_string(FC_STYLE, &family);
+        pat.add_charset(char_set);
+        let font_set = list_fonts(&pat, None);
+        
+        // Font set should be empty
+        assert!(font_set.iter().count() == 0);
     }
 }

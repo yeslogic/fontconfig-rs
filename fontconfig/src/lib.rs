@@ -63,7 +63,7 @@ use std::ptr;
 use std::str::FromStr;
 
 pub use sys::constants::*;
-use sys::{FcBool, FcPattern};
+use sys::{FcBool, FcPattern, FcCharSet};
 
 #[allow(non_upper_case_globals)]
 const FcTrue: FcBool = 1;
@@ -224,6 +224,13 @@ impl<'fc> Pattern<'fc> {
     pub fn add_integer(&mut self, name: &CStr, val: c_int) {
         unsafe {
             ffi_dispatch!(LIB, FcPatternAddInteger, self.pat, name.as_ptr(), val);
+        }
+    }
+
+    /// Add a charset to this pattern
+    pub fn add_charset(&mut self, val: CharSet) {
+        unsafe {
+            ffi_dispatch!(LIB, FcPatternAddCharSet, self.pat, FC_CHARSET.as_ptr(), val.char_set);
         }
     }
 
@@ -628,6 +635,28 @@ impl FromStr for FontFormat {
             "PFR" => Ok(FontFormat::PFR),
             "Windows FNT" => Ok(FontFormat::WindowsFNT),
             _ => Err(UnknownFontFormat(s.to_string())),
+        }
+    }
+}
+
+/// A safe wrapper around fontconfig's `FcCharSet`
+#[repr(C)]
+pub struct CharSet {
+    char_set: *mut FcCharSet,
+}
+
+impl CharSet {
+    /// Creates an empt char set by calling `FcCharSetCreate()`
+    pub fn create() -> Self {
+        unsafe {
+            Self { char_set: ffi_dispatch!(LIB, FcCharSetCreate,) }
+        }
+    }
+
+    /// Add specified char to the charset
+    pub fn add_char(&mut self, c: char) {
+        unsafe {
+            ffi_dispatch!(LIB, FcCharSetAddChar, self.char_set, c as u32);
         }
     }
 }

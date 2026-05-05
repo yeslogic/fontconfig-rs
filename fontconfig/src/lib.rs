@@ -117,6 +117,19 @@ impl Fontconfig {
     pub fn find(&self, family: &str, style: Option<&str>) -> Option<Font> {
         Font::find(self, family, style)
     }
+
+    /// Finds the closest Font for the provided `Pattern`
+    pub fn find_pattern(&self, pat: &mut Pattern) -> Option<Font> {
+     let font_match = pat.font_match();
+
+        font_match.name().and_then(|name| {
+            font_match.filename().map(|filename| Font {
+                name: name.to_owned(),
+                path: PathBuf::from(filename),
+                index: font_match.face_index(),
+            })
+        })   
+    }
 }
 
 /// A very high-level view of a font, only concerned with the name and its file location.

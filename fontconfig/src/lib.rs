@@ -54,8 +54,7 @@ use sys::statics::{LIB, LIB_RESULT};
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
-use core::ffi::c_char;
-use std::ffi::{c_int, CStr, CString};
+use std::ffi::{c_char, c_int, CStr, CString};
 use std::marker::PhantomData;
 use std::mem;
 use std::path::PathBuf;
@@ -63,7 +62,7 @@ use std::ptr;
 use std::str::FromStr;
 
 pub use sys::constants::*;
-use sys::{FcBool, FcPattern};
+use sys::{FcBool, FcCharSet, FcPattern};
 
 #[allow(non_upper_case_globals)]
 const FcTrue: FcBool = 1;
@@ -224,6 +223,19 @@ impl<'fc> Pattern<'fc> {
     pub fn add_integer(&mut self, name: &CStr, val: c_int) {
         unsafe {
             ffi_dispatch!(LIB, FcPatternAddInteger, self.pat, name.as_ptr(), val);
+        }
+    }
+
+    /// Add a charset to this pattern
+    pub fn add_charset(&mut self, val: CharSet) {
+        unsafe {
+            ffi_dispatch!(
+                LIB,
+                FcPatternAddCharSet,
+                self.pat,
+                FC_CHARSET.as_ptr(),
+                val.char_set
+            );
         }
     }
 
@@ -632,6 +644,38 @@ impl FromStr for FontFormat {
     }
 }
 
+/// Wrapper around `FcCharSet`.
+#[repr(C)]
+pub struct CharSet {
+    char_set: *mut FcCharSet,
+}
+
+impl<'fc> CharSet {
+    /// Create a new, empty `CharSet`.
+    pub fn new(_: &'fc Fontconfig) -> Self {
+        let char_set = unsafe { ffi_dispatch!(LIB, FcCharSetCreate,) };
+        assert!(!char_set.is_null());
+
+        Self { char_set }
+    }
+
+    /// Add a char to the `CharSet`.
+    ///
+    /// Returns `false` on failure, either as a result of a constant set or from
+    /// running out of memory.
+    pub fn add_char(&mut self, c: char) -> bool {
+        unsafe { ffi_dispatch!(LIB, FcCharSetAddChar, self.char_set, c as u32) != 0 }
+    }
+}
+
+impl Drop for CharSet {
+    fn drop(&mut self) {
+        unsafe {
+            ffi_dispatch!(LIB, FcCharSetDestroy, self.char_set);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -716,5 +760,34 @@ mod tests {
 
         // Ensure that the set can be iterated again
         assert!(font_set.iter().count() > 0);
+    }
+
+    #[test]
+    fn finds_font_containing_charset() {
+        let fc = Fontconfig::new().unwrap();
+        let mut pat = Pattern::new(&fc);
+        let mut char_set = CharSet::new(&fc);
+        char_set.add_char('a');
+        pat.add_charset(char_set);
+        let font_set = list_fonts(&pat, None);
+
+        // Should find at least one font
+        assert!(font_set.iter().count() > 0);
+    }
+
+    #[test]
+    fn does_not_find_missing_charset() {
+        let fc = Fontconfig::new().unwrap();
+        let mut pat = Pattern::new(&fc);
+        let mut char_set = CharSet::new(&fc);
+        // DejaVu Sans does not support CJK so try finding it for the following U+5317
+        char_set.add_char('北');
+        let family = CString::new("dejavu sans").unwrap();
+        pat.add_string(FC_STYLE, &family);
+        pat.add_charset(char_set);
+        let font_set = list_fonts(&pat, None);
+
+        // Font set should be empty
+        assert_eq!(font_set.iter().count(), 0);
     }
 }

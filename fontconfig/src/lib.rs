@@ -54,8 +54,7 @@ use sys::statics::{LIB, LIB_RESULT};
 #[cfg(not(feature = "dlopen"))]
 use sys::*;
 
-use core::ffi::c_char;
-use std::ffi::{c_int, CStr, CString};
+use std::ffi::{c_char, c_int, CStr, CString};
 use std::marker::PhantomData;
 use std::mem;
 use std::path::PathBuf;
@@ -63,7 +62,7 @@ use std::ptr;
 use std::str::FromStr;
 
 pub use sys::constants::*;
-use sys::{FcBool, FcPattern, FcCharSet};
+use sys::{FcBool, FcCharSet, FcPattern};
 
 #[allow(non_upper_case_globals)]
 const FcTrue: FcBool = 1;
@@ -230,7 +229,13 @@ impl<'fc> Pattern<'fc> {
     /// Add a charset to this pattern
     pub fn add_charset(&mut self, val: CharSet) {
         unsafe {
-            ffi_dispatch!(LIB, FcPatternAddCharSet, self.pat, FC_CHARSET.as_ptr(), val.char_set);
+            ffi_dispatch!(
+                LIB,
+                FcPatternAddCharSet,
+                self.pat,
+                FC_CHARSET.as_ptr(),
+                val.char_set
+            );
         }
     }
 
@@ -639,31 +644,31 @@ impl FromStr for FontFormat {
     }
 }
 
-/// A safe wrapper around fontconfig's `FcCharSet`
+/// Wrapper around `FcCharSet`.
 #[repr(C)]
-pub struct CharSet<'fc> {
+pub struct CharSet {
     char_set: *mut FcCharSet,
-    fc: &'fc Fontconfig,
 }
 
-impl<'fc> CharSet<'fc> {
-    /// Creates an empty char set by calling `FcCharSetCreate()`
-    pub fn new(fc: &'fc Fontconfig) -> Self {
-        let char_set = unsafe {ffi_dispatch!(LIB, FcCharSetCreate,)};
+impl<'fc> CharSet {
+    /// Create a new, empty `CharSet`.
+    pub fn new(_: &'fc Fontconfig) -> Self {
+        let char_set = unsafe { ffi_dispatch!(LIB, FcCharSetCreate,) };
         assert!(!char_set.is_null());
 
-        Self { char_set, fc }
+        Self { char_set }
     }
 
-    /// Add specified char to the charset
-    pub fn add_char(&mut self, c: char) ->  bool {
-        unsafe {
-            ffi_dispatch!(LIB, FcCharSetAddChar, self.char_set, c as u32) != 0
-        }
+    /// Add a char to the `CharSet`.
+    ///
+    /// Returns `false` on failure, either as a result of a constant set or from
+    /// running out of memory.
+    pub fn add_char(&mut self, c: char) -> bool {
+        unsafe { ffi_dispatch!(LIB, FcCharSetAddChar, self.char_set, c as u32) != 0 }
     }
 }
 
-impl<'fc> Drop for CharSet<'fc> {
+impl Drop for CharSet {
     fn drop(&mut self) {
         unsafe {
             ffi_dispatch!(LIB, FcCharSetDestroy, self.char_set);
@@ -781,8 +786,8 @@ mod tests {
         pat.add_string(FC_STYLE, &family);
         pat.add_charset(char_set);
         let font_set = list_fonts(&pat, None);
-        
+
         // Font set should be empty
-        assert!(font_set.iter().count() == 0);
+        assert_eq!(font_set.iter().count(), 0);
     }
 }

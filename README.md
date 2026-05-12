@@ -14,38 +14,49 @@ fontconfig
 
 <br>
 
-A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating fonts on UNIX-like systems such as Linux and BSD. Requires Fontconfig to be installed.
+A wrapper around [freedesktop.org's Fontconfig library][homepage], for locating fonts on
+UNIX-like systems such as Linux and FreeBSD. Requires Fontconfig to be installed. Alternatively,
+set the environment variable `RUST_FONTCONFIG_DLOPEN=on` or enable the `dlopen` Cargo feature to
+load the library at runtime rather than link at build time (useful for cross compiling).
+
+See the [Fontconfig developer reference][1] for more information.
+
+[1]: http://www.freedesktop.org/software/fontconfig/fontconfig-devel/t1.html
+[homepage]: https://www.freedesktop.org/wiki/Software/fontconfig/
 
 Dependencies
-------------
+============
 
-This crate is a wrapper around the Fontconfig C-library, thus it must be installed. If your OS has separate `dev`/`devel` packages, then you will need to install the that version of the package. Below is the package name for a few operating systems. If your system is not listed, a search of your package repository for `fontconfig` should find what you need.
+To use this crate, you need to have Fontconfig installed on your system.
+For example, install the package:
 
-* Alpine Linux: `fontconfig-dev`
 * Arch Linux: `fontconfig`
 * Debian-based systems: `libfontconfig1-dev`
 * FreeBSD: `fontconfig`
-* Nix: `fontconfig`, `pkg-config` (tested on nixos-unstable)
 * Void Linux: `fontconfig-devel`
 
 Usage
 -----
 
-`main.rs`:
+### Example
 
 ```rust
-use fontconfig::Fontconfig;
+use fontconfig::{Fontconfig, FontconfigError};
 
-fn main() {
-    let fc = Fontconfig::new().unwrap();
-    // `Fontconfig::find()` returns `Option` (will rarely be `None` but still could be)
-    let font = fc.find("freeserif", None).unwrap();
+fn main() -> Result<(), FontconfigError> {
+    let fc = Fontconfig::new().expect("unable to init Fontconfig");
+    // `Fontconfig::find()` returns `Result` (will rarely be `Err` but still could be)
+    let font = fc.find("freeserif", None)?;
     // `name` is a `String`, `path` is a `Path`
     println!("Name: {}\nPath: {}", font.name, font.path.display());
+    Ok(())
 }
 ```
 
-You could then, for example, use `font.path` to create a `GlyphCache` from [`opengl_graphics`][gl] and pass it to [`conrod`][conrod].
+For more advanced usage, see [list_fonts] and the [Pattern] type.
+
+See the [examples directory in the repository](https://github.com/yeslogic/fontconfig-rs/blob/master/examples/fc-list.rs)
+for more examples.
 
 ### Cargo Features
 
@@ -53,7 +64,13 @@ You could then, for example, use `font.path` to create a `GlyphCache` from [`ope
 |---------------|-----------------------------------|:---------------:|-----------------------|
 | `dlopen`      | [dlopen] libfontconfig at runtime |        ❌       |                       |
 
-The `dlopen` feature enables building this crate without dynamically linking to the Fontconfig C library at link time. Instead, Fontconfig will be dynamically loaded at runtime with the [dlopen] function. This can be useful in cross-compiling situations as you don't need to have a version of Fontcofig available for the target platform available at compile time.
+The `dlopen` feature enables building this crate without dynamically linking to the Fontconfig C
+library at link time. Instead, Fontconfig will be dynamically loaded at runtime with the
+[dlopen] function. This can be useful in cross-compiling situations as you don't need to have a
+version of Fontconfig available for the target platform available at compile time. This can also
+be enabled by setting the `RUST_FONTCONFIG_DLOPEN` environment variable.
+
+[dlopen]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/dlopen.html
 
 Other Fontconfig Crates
 -----------------------

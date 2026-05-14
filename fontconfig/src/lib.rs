@@ -889,14 +889,16 @@ fn is_non_null<T>(ptr: *mut T) -> bool {
 mod tests {
     use super::*;
 
-    #[test]
-    fn it_works() {
-        assert!(Fontconfig::new().is_some())
-    }
+    use std::sync::Mutex;
+
+    // Shared handle for tests, which run in separate threads.
+    // NOTE: Drop is not called on static items, so valgrind will see this as leaked memory.
+    static FC: Mutex<Option<Fontconfig>> = Mutex::new(None);
 
     #[test]
     fn test_find_font() -> Result<(), FontconfigError> {
-        let fc = Fontconfig::new().expect("FcInit");
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
         fc.find("dejavu sans", None)?.print_debug();
         fc.find("dejavu sans", Some("oblique"))?.print_debug();
         Ok(())
@@ -904,7 +906,9 @@ mod tests {
 
     #[test]
     fn test_iter_and_print() -> Result<(), FontconfigError> {
-        let fc = Fontconfig::new().expect("FcInit");
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+
         let fontset = list_fonts(&Pattern::new(&fc)?, None)?;
         for pattern in fontset.iter() {
             println!("{:?}", pattern.name());
@@ -917,7 +921,9 @@ mod tests {
 
     #[test]
     fn test_empty_font_set() -> Result<(), FontconfigError> {
-        let fc = Fontconfig::new().expect("FcInit");
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+
         let mut pat = Pattern::new(&fc)?;
         let family = CString::new("xxx yyy zzz does not exist")?;
         pat.add_string(FC_FAMILY, &family)?;
@@ -931,7 +937,9 @@ mod tests {
 
     #[test]
     fn iter_lang_set() -> Result<(), FontconfigError> {
-        let fc = Fontconfig::new().expect("FcInit");
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+
         let mut pat = Pattern::new(&fc)?;
         let family = CString::new("dejavu sans")?;
         pat.add_string(FC_FAMILY, &family)?;
@@ -951,7 +959,9 @@ mod tests {
 
     #[test]
     fn test_sort_fonts() -> Result<(), FontconfigError> {
-        let fc = Fontconfig::new().expect("FcInit");
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+
         let mut pat = Pattern::new(&fc)?;
         let family = CString::new("dejavu sans")?;
         pat.add_string(FC_FAMILY, &family)?;
@@ -972,7 +982,9 @@ mod tests {
 
     #[test]
     fn finds_font_containing_charset() -> Result<(), FontconfigError> {
-        let fc = Fontconfig::new().expect("FcInit");
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+
         let mut pat = Pattern::new(&fc)?;
         let mut char_set = CharSet::new(&fc)?;
         char_set.add_char('a')?;
@@ -986,7 +998,9 @@ mod tests {
 
     #[test]
     fn does_not_find_missing_charset() -> Result<(), FontconfigError> {
-        let fc = Fontconfig::new().expect("FcInit");
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+
         let mut pat = Pattern::new(&fc)?;
         let mut char_set = CharSet::new(&fc)?;
         // DejaVu Sans does not support CJK so try finding it for the following U+5317

@@ -281,6 +281,16 @@ impl<'fc> Pattern<'fc> {
         Pattern { pat, fc }
     }
 
+    /// Wrap an existing `FcPattern`.
+    ///
+    /// The returned wrapper assumes ownership of the `FcPattern`.
+    ///
+    /// **Safety:** The pattern pointer must be valid/non-null.
+    unsafe fn from_raw(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern<'_> {
+        assert!(is_non_null(pat));
+        Pattern { pat, fc }
+    }
+
     /// Add a key-value pair of type `String` to this pattern.
     ///
     /// See useful keys in the [fontconfig reference][1].
@@ -421,7 +431,7 @@ impl<'fc> Pattern<'fc> {
             let mut res = sys::FcResultNoMatch;
             let pattern_ptr = ffi_dispatch!(LIB, FcFontMatch, ptr::null_mut(), self.pat, &mut res);
             is_non_null(pattern_ptr)
-                .then(|| Pattern::from_pattern(self.fc, pattern_ptr))
+                .then(|| Pattern::from_raw(self.fc, pattern_ptr))
                 .ok_or(FontconfigError::Failed)
         }
     }

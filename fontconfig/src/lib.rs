@@ -72,6 +72,7 @@ use sys::*;
 
 use std::ffi::{self, c_char, c_int, CStr, CString};
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::{self, FromStr};
 use std::{fmt, ptr};
@@ -657,6 +658,12 @@ pub struct FontSet<'fc> {
     fc: &'fc Fontconfig,
 }
 
+/// A [Pattern] reference returned from [FontSet::iter].
+pub struct PatternRef<'fc, 'set> {
+    pattern: Pattern<'fc>,
+    _life: PhantomData<&'set FontSet<'fc>>,
+}
+
 impl<'fc> FontSet<'fc> {
     /// Create a new, empty `FontSet`.
     pub fn new(fc: &Fontconfig) -> Result<FontSet<'_>, FontconfigError> {
@@ -695,7 +702,7 @@ impl<'fc> FontSet<'fc> {
     }
 
     /// Iterate the fonts (as `Patterns`) in this `FontSet`.
-    pub fn iter(&self) -> impl Iterator<Item = Pattern<'_>> {
+    pub fn iter(&self) -> impl Iterator<Item = PatternRef<'fc, '_>> {
         let patterns = unsafe {
             let fontset = self.fcset;
             // The set may be empty, in which case .fonts is NULL, but slices require
@@ -706,15 +713,27 @@ impl<'fc> FontSet<'fc> {
                 &[]
             }
         };
-        patterns
-            .iter()
-            .map(move |&pat| unsafe { Pattern::from_pattern(self.fc, pat) })
+        patterns.iter().map(move |&pat| {
+            let pattern = unsafe { Pattern::from_pattern(self.fc, pat) };
+            PatternRef {
+                pattern,
+                _life: PhantomData,
+            }
+        })
     }
 }
 
 impl<'fc> Drop for FontSet<'fc> {
     fn drop(&mut self) {
         unsafe { ffi_dispatch!(LIB, FcFontSetDestroy, self.fcset) }
+    }
+}
+
+impl<'fc, 'set> Deref for PatternRef<'fc, 'set> {
+    type Target = Pattern<'fc>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.pattern
     }
 }
 

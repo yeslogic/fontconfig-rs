@@ -263,10 +263,12 @@ impl<'fc> Pattern<'fc> {
     /// The [Fontconfig] handle is obtained from [Fontconfig::new].
     #[doc(alias = "FcPatternCreate")]
     pub fn new(fc: &Fontconfig) -> Result<Pattern<'_>, FontconfigError> {
-        let pat = unsafe { ffi_dispatch!(LIB, FcPatternCreate,) };
-        is_non_null(pat)
-            .then_some(Pattern { pat, fc })
-            .ok_or(FontconfigError::Failed)
+        unsafe {
+            let pat = ffi_dispatch!(LIB, FcPatternCreate,);
+            is_non_null(pat)
+                .then(|| Pattern::from_raw(fc, pat))
+                .ok_or(FontconfigError::Failed)
+        }
     }
 
     /// Create a `Pattern` from a raw fontconfig FcPattern pointer.
@@ -287,7 +289,6 @@ impl<'fc> Pattern<'fc> {
     ///
     /// **Safety:** The pattern pointer must be valid/non-null.
     unsafe fn from_raw(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern<'_> {
-        assert!(is_non_null(pat));
         Pattern { pat, fc }
     }
 
@@ -335,7 +336,7 @@ impl<'fc> Pattern<'fc> {
         }
     }
 
-    /// Get string the value for a key from this pattern.
+    /// Get the string value for a key from this pattern.
     #[doc(alias = "FcPatternGetString")]
     pub fn get_string<'a>(&'a self, name: &'a CStr) -> Result<&'a str, FontconfigError> {
         unsafe {
@@ -677,7 +678,14 @@ impl<'fc> FontSet<'fc> {
     /// Add a `Pattern` to this `FontSet`.
     #[doc(alias = "FcFontSetAdd")]
     pub fn add_pattern(&mut self, pat: Pattern) -> Result<(), FontconfigError> {
-        unsafe { ffi_dispatch!(LIB, FcFontSetAdd, self.fcset, pat.pat).to_result() }
+        unsafe {
+            ffi_dispatch!(LIB, FcFontSetAdd, self.fcset, pat.pat).to_result()?;
+            // Increment the reference count because the FontSet now owns the pattern, but does not
+            // bump the ref count itself. When `pat` goes out of scope Drop will decrement the ref
+            // count, leaving the FontSet with its reference.
+            ffi_dispatch!(LIB, FcPatternReference, pat.pat);
+            Ok(())
+        }
     }
 
     /// Print this `FontSet` to stdout.
@@ -901,8 +909,11 @@ mod tests {
 
     use std::sync::Mutex;
 
+    use dtor::dtor;
+
     // Shared handle for tests, which run in separate threads.
-    // NOTE: Drop is not called on static items, so valgrind will see this as leaked memory.
+    // NOTE: Drop is not called on static items, so we have a destructor function that
+    // calls FcFini. This allows tests to be run under valgrind and ideally see no leaks.
     static FC: Mutex<Option<Fontconfig>> = Mutex::new(None);
 
     #[test]
@@ -927,6 +938,21 @@ mod tests {
         // Ensure that the set can be iterated again
         assert!(fontset.iter().count() > 0);
         Ok(())
+    }
+
+    #[test]
+    fn patterns_are_not_leaked() {
+        // Extracted from: https://github.com/yeslogic/fontconfig-rs/issues/61
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+        let family = CString::new("monospace").unwrap();
+
+        for _ in 0..100 {
+            let mut pattern = Pattern::new(&fc).unwrap();
+            pattern.add_string(FC_FAMILY, &family).unwrap();
+            let matched = pattern.font_match().unwrap();
+            drop(matched);
+        }
     }
 
     #[test]
@@ -1023,5 +1049,19 @@ mod tests {
         // Font set should be empty
         assert_eq!(font_set.iter().count(), 0);
         Ok(())
+    }
+
+    #[dtor(unsafe)]
+    fn shutdown() {
+        match FC.lock() {
+            // Avoid unwrap so the we don't invoke panic machinery
+            Ok(mut lock) => match lock.take() {
+                Some(_fc) => {
+                    unsafe { ffi_dispatch!(LIB, FcFini,) };
+                }
+                None => {}
+            },
+            Err(_poisoned) => {}
+        }
     }
 }

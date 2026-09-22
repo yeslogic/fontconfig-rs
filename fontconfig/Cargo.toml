@@ -24,3 +24,6 @@ path = "../fontconfig-sys"
 
 [features]
 dlopen = [ "yeslogic-fontconfig-sys/dlopen" ]
+
+[dev-dependencies]
+dtor = "1.0.6"

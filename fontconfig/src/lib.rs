@@ -530,6 +530,8 @@ impl<'fc> Pattern<'fc> {
                 return Err(FontconfigError::Failed);
             }
             let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
+            // FcStrListCreate bumps the ref count of the FcStrSet
+            ffi_dispatch!(LIB, FcStrSetDestroy, ss);
             if lang_strs.is_null() {
                 return Err(FontconfigError::Failed);
             }
@@ -1009,6 +1011,35 @@ mod tests {
         // Test collect
         let langs = pattern.lang_set()?.collect::<Vec<_>>();
         assert!(langs.iter().find(|&&l| l == "ie").is_some());
+        Ok(())
+    }
+
+    // A synthetic language set makes tests independent of installed fonts
+    fn pattern_with_language(fc: &Fontconfig) -> Result<Pattern<'_>, FontconfigError> {
+        let name = CString::new(":lang=en")?;
+        let raw = unsafe { ffi_dispatch!(LIB, FcNameParse, name.as_ptr() as *const u8) };
+        if raw.is_null() {
+            return Err(FontconfigError::Failed);
+        }
+        Ok(unsafe { Pattern::from_raw(fc, raw) })
+    }
+
+    #[test]
+    fn language_sets_are_not_leaked() -> Result<(), FontconfigError> {
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+        let pattern = pattern_with_language(fc)?;
+
+        // Previously this would result in FcStrSets being leaked
+        for _ in 0..100 {
+            let mut langs = pattern.lang_set()?;
+            assert_eq!(langs.next().as_deref(), Some("en"));
+            assert!(langs.next().is_none());
+            drop(langs);
+
+            // Cleanup must also work when iteration never starts.
+            drop(pattern.lang_set()?);
+        }
         Ok(())
     }
 

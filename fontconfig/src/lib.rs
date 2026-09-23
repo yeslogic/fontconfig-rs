@@ -453,21 +453,28 @@ impl<'fc> Pattern<'fc> {
         self.config_substitute()?;
         self.default_substitute();
 
-        // FcFontSort always returns a (possibly empty) set so we don't need to check this.
         let mut res = sys::FcResultNoMatch;
         let unicode_coverage = ptr::null_mut();
         let config = ptr::null_mut();
+        let trim = match trim {
+            UnicodeCoverage::Trim => FcTrue,
+            UnicodeCoverage::NoTrim => FcFalse,
+        };
         unsafe {
             let raw_set = ffi_dispatch!(
                 LIB,
                 FcFontSort,
                 config,
                 self.pat,
-                trim as FcBool,
+                trim,
                 unicode_coverage,
                 &mut res
             );
-            Ok(FontSet::from_raw(self.fc, raw_set))
+            if is_non_null(raw_set) {
+                Ok(FontSet::from_raw(self.fc, raw_set))
+            } else {
+                res.to_result().and(Err(FontconfigError::Failed))
+            }
         }
     }
 
@@ -596,10 +603,7 @@ impl<'fc> StrSet<'fc> {
     ///
     /// **Safety:** The string list pointer must be valid/non-null.
     unsafe fn from_raw(fc: &'fc Fontconfig, set: *mut sys::FcStrSet) -> Self {
-        Self {
-            fc,
-            set,
-        }
+        Self { fc, set }
     }
 
     /// Iterate the strings in this this StrSet.

@@ -72,6 +72,7 @@ use sys::*;
 
 use std::ffi::{self, c_char, c_int, CStr, CString};
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::{self, FromStr};
 use std::{fmt, ptr};
@@ -263,10 +264,12 @@ impl<'fc> Pattern<'fc> {
     /// The [Fontconfig] handle is obtained from [Fontconfig::new].
     #[doc(alias = "FcPatternCreate")]
     pub fn new(fc: &Fontconfig) -> Result<Pattern<'_>, FontconfigError> {
-        let pat = unsafe { ffi_dispatch!(LIB, FcPatternCreate,) };
-        is_non_null(pat)
-            .then_some(Pattern { pat, fc })
-            .ok_or(FontconfigError::Failed)
+        unsafe {
+            let pat = ffi_dispatch!(LIB, FcPatternCreate,);
+            is_non_null(pat)
+                .then(|| Pattern::from_raw(fc, pat))
+                .ok_or(FontconfigError::Failed)
+        }
     }
 
     /// Create a `Pattern` from a raw fontconfig FcPattern pointer.
@@ -287,7 +290,6 @@ impl<'fc> Pattern<'fc> {
     ///
     /// **Safety:** The pattern pointer must be valid/non-null.
     unsafe fn from_raw(fc: &Fontconfig, pat: *mut FcPattern) -> Pattern<'_> {
-        assert!(is_non_null(pat));
         Pattern { pat, fc }
     }
 
@@ -335,7 +337,7 @@ impl<'fc> Pattern<'fc> {
         }
     }
 
-    /// Get string the value for a key from this pattern.
+    /// Get the string value for a key from this pattern.
     #[doc(alias = "FcPatternGetString")]
     pub fn get_string<'a>(&'a self, name: &'a CStr) -> Result<&'a str, FontconfigError> {
         unsafe {
@@ -451,21 +453,28 @@ impl<'fc> Pattern<'fc> {
         self.config_substitute()?;
         self.default_substitute();
 
-        // FcFontSort always returns a (possibly empty) set so we don't need to check this.
         let mut res = sys::FcResultNoMatch;
         let unicode_coverage = ptr::null_mut();
         let config = ptr::null_mut();
+        let trim = match trim {
+            UnicodeCoverage::Trim => FcTrue,
+            UnicodeCoverage::NoTrim => FcFalse,
+        };
         unsafe {
             let raw_set = ffi_dispatch!(
                 LIB,
                 FcFontSort,
                 config,
                 self.pat,
-                trim as FcBool,
+                trim,
                 unicode_coverage,
                 &mut res
             );
-            Ok(FontSet::from_raw(self.fc, raw_set))
+            if is_non_null(raw_set) {
+                Ok(FontSet::from_raw(self.fc, raw_set))
+            } else {
+                res.to_result().and(Err(FontconfigError::Failed))
+            }
         }
     }
 
@@ -511,7 +520,7 @@ impl<'fc> Pattern<'fc> {
 
     /// Get the language set of this pattern.
     #[doc(alias = "FcPatternGetLangSet")]
-    pub fn lang_set(&self) -> Result<StrList<'_>, FontconfigError> {
+    pub fn lang_set(&self) -> Result<StrSet<'fc>, FontconfigError> {
         unsafe {
             let mut lang_set: *mut sys::FcLangSet = ptr::null_mut();
             ffi_dispatch!(
@@ -527,11 +536,7 @@ impl<'fc> Pattern<'fc> {
             if ss.is_null() {
                 return Err(FontconfigError::Failed);
             }
-            let lang_strs: *mut sys::FcStrList = ffi_dispatch!(LIB, FcStrListCreate, ss);
-            if lang_strs.is_null() {
-                return Err(FontconfigError::Failed);
-            }
-            Ok(StrList::from_raw(self.fc, lang_strs))
+            Ok(StrSet::from_raw(self.fc, ss))
         }
     }
 
@@ -548,10 +553,15 @@ impl<'fc> Pattern<'fc> {
 
 impl<'fc> std::fmt::Debug for Pattern<'fc> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let result;
         let fcstr = unsafe { ffi_dispatch!(LIB, FcNameUnparse, self.pat) };
-        let fcstr = unsafe { CStr::from_ptr(fcstr as *const c_char) };
-        let result = write!(f, "{:?}", fcstr);
-        unsafe { ffi_dispatch!(LIB, FcStrFree, fcstr.as_ptr() as *mut u8) };
+        if is_non_null(fcstr) {
+            let cstr = unsafe { CStr::from_ptr(fcstr as *const c_char) };
+            result = write!(f, "{:?}", cstr);
+            unsafe { ffi_dispatch!(LIB, FcStrFree, fcstr) };
+        } else {
+            result = f.write_str("(null)");
+        }
         result
     }
 }
@@ -584,6 +594,40 @@ impl<'fc> Drop for Pattern<'fc> {
     }
 }
 
+/// Wrapper around `FcStrSet`.
+#[doc(alias = "FcStrSet")]
+pub struct StrSet<'fc> {
+    fc: &'fc Fontconfig,
+    set: *mut sys::FcStrSet,
+}
+
+impl<'fc> StrSet<'fc> {
+    /// Wrap an existing `FcStrSet`.
+    ///
+    /// The returned wrapper assumes ownership of the `FcStrSet`.
+    ///
+    /// **Safety:** The string list pointer must be valid/non-null.
+    unsafe fn from_raw(fc: &'fc Fontconfig, set: *mut sys::FcStrSet) -> Self {
+        Self { fc, set }
+    }
+
+    /// Iterate the strings in this this StrSet.
+    pub fn iter(&self) -> Result<StrList<'_>, FontconfigError> {
+        let lang_strs: *mut sys::FcStrList =
+            unsafe { ffi_dispatch!(LIB, FcStrListCreate, self.set) };
+        if lang_strs.is_null() {
+            return Err(FontconfigError::Failed);
+        }
+        Ok(unsafe { StrList::from_raw(self.fc, lang_strs) })
+    }
+}
+
+impl Drop for StrSet<'_> {
+    fn drop(&mut self) {
+        unsafe { ffi_dispatch!(LIB, FcStrSetDestroy, self.set) };
+    }
+}
+
 /// Wrapper around `FcStrList`.
 ///
 /// The wrapper implements [Iterator] so it can be iterated directly, filtered etc.
@@ -600,7 +644,7 @@ impl<'fc> Drop for Pattern<'fc> {
 /// let fonts = fontconfig::list_fonts(&Pattern::new(&fc)?, None)?;
 /// let ja_fonts: Vec<_> = fonts
 ///     .iter()
-///     .filter(|p| p.lang_set().map_or(false, |mut langs| langs.any(|l| l == "ja")))
+///     .filter(|p| p.lang_set().map_or(false, |lang_set| lang_set.iter().map_or(false, |mut langs| langs.any(|l| l == "ja"))))
 ///     .collect();
 /// # Ok(())
 /// # }
@@ -608,16 +652,16 @@ impl<'fc> Drop for Pattern<'fc> {
 #[doc(alias = "FcStrList")]
 pub struct StrList<'a> {
     list: *mut sys::FcStrList,
-    _life: PhantomData<&'a sys::FcStrList>,
+    _life: PhantomData<&'a sys::FcStrSet>,
 }
 
 impl<'a> StrList<'a> {
-    /// Wrap an existing `FcStrSet`.
+    /// Wrap an existing `FcStrList`.
     ///
-    /// The returned wrapper assumes ownership of the `FcStrSet`.
+    /// The returned wrapper assumes ownership of the `FcStrList`.
     ///
     /// **Safety:** The string list pointer must be valid/non-null.
-    unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrSet) -> Self {
+    unsafe fn from_raw(_: &Fontconfig, raw_list: *mut sys::FcStrList) -> Self {
         Self {
             list: raw_list,
             _life: PhantomData,
@@ -656,6 +700,12 @@ pub struct FontSet<'fc> {
     fc: &'fc Fontconfig,
 }
 
+/// A [Pattern] reference returned from [FontSet::iter].
+pub struct PatternRef<'fc, 'set> {
+    pattern: Pattern<'fc>,
+    _life: PhantomData<&'set FontSet<'fc>>,
+}
+
 impl<'fc> FontSet<'fc> {
     /// Create a new, empty `FontSet`.
     pub fn new(fc: &Fontconfig) -> Result<FontSet<'_>, FontconfigError> {
@@ -677,7 +727,14 @@ impl<'fc> FontSet<'fc> {
     /// Add a `Pattern` to this `FontSet`.
     #[doc(alias = "FcFontSetAdd")]
     pub fn add_pattern(&mut self, pat: Pattern) -> Result<(), FontconfigError> {
-        unsafe { ffi_dispatch!(LIB, FcFontSetAdd, self.fcset, pat.pat).to_result() }
+        unsafe {
+            ffi_dispatch!(LIB, FcFontSetAdd, self.fcset, pat.pat).to_result()?;
+            // Increment the reference count because the FontSet now owns the pattern, but does not
+            // bump the ref count itself. When `pat` goes out of scope Drop will decrement the ref
+            // count, leaving the FontSet with its reference.
+            ffi_dispatch!(LIB, FcPatternReference, pat.pat);
+            Ok(())
+        }
     }
 
     /// Print this `FontSet` to stdout.
@@ -687,7 +744,7 @@ impl<'fc> FontSet<'fc> {
     }
 
     /// Iterate the fonts (as `Patterns`) in this `FontSet`.
-    pub fn iter(&self) -> impl Iterator<Item = Pattern<'_>> {
+    pub fn iter(&self) -> impl Iterator<Item = PatternRef<'fc, '_>> {
         let patterns = unsafe {
             let fontset = self.fcset;
             // The set may be empty, in which case .fonts is NULL, but slices require
@@ -698,15 +755,27 @@ impl<'fc> FontSet<'fc> {
                 &[]
             }
         };
-        patterns
-            .iter()
-            .map(move |&pat| unsafe { Pattern::from_pattern(self.fc, pat) })
+        patterns.iter().map(move |&pat| {
+            let pattern = unsafe { Pattern::from_pattern(self.fc, pat) };
+            PatternRef {
+                pattern,
+                _life: PhantomData,
+            }
+        })
     }
 }
 
 impl<'fc> Drop for FontSet<'fc> {
     fn drop(&mut self) {
         unsafe { ffi_dispatch!(LIB, FcFontSetDestroy, self.fcset) }
+    }
+}
+
+impl<'fc, 'set> Deref for PatternRef<'fc, 'set> {
+    type Target = Pattern<'fc>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.pattern
     }
 }
 
@@ -901,8 +970,11 @@ mod tests {
 
     use std::sync::Mutex;
 
+    use dtor::dtor;
+
     // Shared handle for tests, which run in separate threads.
-    // NOTE: Drop is not called on static items, so valgrind will see this as leaked memory.
+    // NOTE: Drop is not called on static items, so we have a destructor function that
+    // calls FcFini. This allows tests to be run under valgrind and ideally see no leaks.
     static FC: Mutex<Option<Fontconfig>> = Mutex::new(None);
 
     #[test]
@@ -930,6 +1002,21 @@ mod tests {
     }
 
     #[test]
+    fn patterns_are_not_leaked() {
+        // Extracted from: https://github.com/yeslogic/fontconfig-rs/issues/61
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+        let family = CString::new("monospace").unwrap();
+
+        for _ in 0..100 {
+            let mut pattern = Pattern::new(&fc).unwrap();
+            pattern.add_string(FC_FAMILY, &family).unwrap();
+            let matched = pattern.font_match().unwrap();
+            drop(matched);
+        }
+    }
+
+    #[test]
     fn test_empty_font_set() -> Result<(), FontconfigError> {
         let mut lock = FC.lock().unwrap();
         let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
@@ -954,16 +1041,72 @@ mod tests {
         let family = CString::new("dejavu sans")?;
         pat.add_string(FC_FAMILY, &family)?;
         let pattern = pat.font_match()?;
-        for lang in pattern.lang_set()? {
+        for lang in pattern.lang_set()?.iter()? {
             println!("{:?}", lang);
         }
 
         // Test find
-        assert!(pattern.lang_set()?.find(|&lang| lang == "za").is_some());
+        assert!(pattern
+            .lang_set()?
+            .iter()?
+            .find(|&lang| lang == "za")
+            .is_some());
 
         // Test collect
-        let langs = pattern.lang_set()?.collect::<Vec<_>>();
+        let set = pattern.lang_set()?;
+        let langs = set.iter()?.collect::<Vec<_>>();
         assert!(langs.iter().find(|&&l| l == "ie").is_some());
+        Ok(())
+    }
+
+    // A synthetic language set makes tests independent of installed fonts
+    fn pattern_with_language(fc: &Fontconfig) -> Result<Pattern<'_>, FontconfigError> {
+        let name = CString::new(":lang=en")?;
+        let raw = unsafe { ffi_dispatch!(LIB, FcNameParse, name.as_ptr() as *const u8) };
+        if raw.is_null() {
+            return Err(FontconfigError::Failed);
+        }
+        Ok(unsafe { Pattern::from_raw(fc, raw) })
+    }
+
+    #[test]
+    fn language_sets_are_not_leaked() -> Result<(), FontconfigError> {
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+        let pattern = pattern_with_language(fc)?;
+
+        // Previously this would result in FcStrSets being leaked
+        for _ in 0..100 {
+            let set = pattern.lang_set()?;
+            let mut langs = set.iter()?;
+            assert_eq!(langs.next().as_deref(), Some("en"));
+            assert!(langs.next().is_none());
+            drop(langs);
+
+            // Cleanup must also work when iteration never starts.
+            drop(pattern.lang_set()?);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn language_strings_survive_iterator_drop() -> Result<(), FontconfigError> {
+        let mut lock = FC.lock().unwrap();
+        let fc = lock.get_or_insert_with(|| Fontconfig::new().expect("FcInit"));
+        let pattern = pattern_with_language(fc)?;
+
+        let set = pattern.lang_set()?;
+        let mut langs = set.iter()?;
+        let first = langs.next().expect("the fixture contains English");
+        drop(langs);
+
+        // Previously the lifetimes of the strings were not managed correctly and this would
+        // result in a read of a deallocated string.
+        assert_eq!(first, "en");
+
+        let set = pattern.lang_set()?;
+        let collected: Vec<_> = set.iter()?.collect();
+        assert_eq!(collected, ["en"]);
         Ok(())
     }
 
@@ -1023,5 +1166,19 @@ mod tests {
         // Font set should be empty
         assert_eq!(font_set.iter().count(), 0);
         Ok(())
+    }
+
+    #[dtor(unsafe)]
+    fn shutdown() {
+        match FC.lock() {
+            // Avoid unwrap so the we don't invoke panic machinery
+            Ok(mut lock) => match lock.take() {
+                Some(_fc) => {
+                    unsafe { ffi_dispatch!(LIB, FcFini,) };
+                }
+                None => {}
+            },
+            Err(_poisoned) => {}
+        }
     }
 }

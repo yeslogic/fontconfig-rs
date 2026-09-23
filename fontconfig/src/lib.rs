@@ -553,10 +553,15 @@ impl<'fc> Pattern<'fc> {
 
 impl<'fc> std::fmt::Debug for Pattern<'fc> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let result;
         let fcstr = unsafe { ffi_dispatch!(LIB, FcNameUnparse, self.pat) };
-        let fcstr = unsafe { CStr::from_ptr(fcstr as *const c_char) };
-        let result = write!(f, "{:?}", fcstr);
-        unsafe { ffi_dispatch!(LIB, FcStrFree, fcstr.as_ptr() as *mut u8) };
+        if is_non_null(fcstr) {
+            let cstr = unsafe { CStr::from_ptr(fcstr as *const c_char) };
+            result = write!(f, "{:?}", cstr);
+            unsafe { ffi_dispatch!(LIB, FcStrFree, fcstr) };
+        } else {
+            result = f.write_str("(null)");
+        }
         result
     }
 }
@@ -622,7 +627,6 @@ impl Drop for StrSet<'_> {
         unsafe { ffi_dispatch!(LIB, FcStrSetDestroy, self.set) };
     }
 }
-
 
 /// Wrapper around `FcStrList`.
 ///

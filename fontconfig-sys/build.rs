@@ -5,6 +5,11 @@ fn main() {
         println!("cargo:rustc-cfg=feature=\"dlopen\"");
     }
     if !(dlopen || cfg!(feature = "dlopen")) {
-        pkg_config::find_library("fontconfig").unwrap();
+        let library = pkg_config::find_library("fontconfig").unwrap();
+        // Rerun when a versioned link dir (e.g. a Homebrew Cellar) is removed.
+        // Missing ones are skipped, as they would force a rerun on every build.
+        for dir in library.link_paths.iter().filter(|d| d.exists()) {
+            println!("cargo:rerun-if-changed={}", dir.display());
+        }
     }
 }
